@@ -1,0 +1,44 @@
+server:
+  port: 8090
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:root}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    show-sql: false
+  flyway:
+    enabled: false
+  transaction:
+    default-timeout: 30
+
+camunda:
+  bpm:
+    admin-user:
+      id: admin
+      password: admin
+    filter:
+      create: All tasks
+    database:
+      schema-update: true
+    job-execution:
+      enabled: true
+    webapp:
+      enabled: true
+    deployment-resource-pattern: classpath*:**/*.bpmn,classpath*:**/*.bpmn20.xml
+    process-engine-name: default
+
+workflow:
+  tenant-service:
+    base-url: ${TENANT_SERVICE_URL:http://tenant-service:8080}
+
+logging:
+  level:
+    root: INFO
+    com.kymatic.workflow: DEBUG
+

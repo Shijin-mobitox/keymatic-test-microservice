@@ -1,0 +1,128 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.2
+    command: start-dev --import-realm
+    environment:
+      # Bootstrap admin credentials for Keycloak
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # Legacy admin credentials (for compatibility)
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      # Database configuration
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres-db:5432/postgres
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: root
+      # Hostname and proxy configuration for cross-origin cookie support
+      KC_HOSTNAME_STRICT_HTTPS: false
+      KC_HOSTNAME_STRICT_BACKCHANNEL: false
+      KC_PROXY: edge
+      KC_HTTP_RELATIVE_PATH: /
+      KC_HOSTNAME_STRICT: false
+      # Keycloak's base URL - use Keycloak's actual URL
+      # Frontend URL should be set per-realm in Admin Console (Realm Settings -> Frontend URL)
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: 8085
+    ports:
+      - "8085:8080"
+    volumes:
+      - ./config/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
+    depends_on:
+      - postgres-db
+    networks:
+      - kymatic-network
+
+  postgres-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-db-data:/var/lib/postgresql/data
+    networks:
+      - kymatic-network
+
+  gateway-service:
+    build: ./gateway-service
+    ports:
+      - "8081:8080"
+    depends_on:
+      - keycloak
+      - postgres-db
+    networks:
+      - kymatic-network
+
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "8082:8080"
+    depends_on:
+      - keycloak
+      - postgres-db
+    networks:
+      - kymatic-network
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/postgres
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=root
+
+  tenant-service:
+    build:
+      context: .
+      dockerfile: tenant-service/Dockerfile
+    ports:
+      - "8083:8083"
+    depends_on:
+      - keycloak
+      - workflow-service
+    networks:
+      - kymatic-network
+    environment:
+      # Use host machine PostgreSQL instead of Docker postgres-db
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/postgres
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://keycloak:8080/realms/kymatic
+      - SERVER_PORT=8083
+
+  api-service:
+    build: ./api-service
+    ports:
+      - "8084:8080"
+      - "8086:8086"
+    depends_on:
+      - keycloak
+    networks:
+      - kymatic-network
+    environment:
+      # Use host machine PostgreSQL instead of Docker postgres-db
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/postgres
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=root
+
+  workflow-service:
+    build:
+      context: .
+      dockerfile: workflow-service/Dockerfile
+    ports:
+      - "8090:8090"
+    depends_on:
+      - keycloak
+    networks:
+      - kymatic-network
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/postgres
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=root
+      - WORKFLOW_TENANT_SERVICE_BASE_URL=http://tenant-service:8080
+
+networks:
+  kymatic-network:
+    driver: bridge
+
+volumes:
+  postgres-db-data:

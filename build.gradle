@@ -1,0 +1,25 @@
+plugins {
+    id 'org.springframework.boot' version '3.2.5' apply false
+    id 'io.spring.dependency-management' version '1.1.4' apply false
+}
+
+allprojects {
+    group = 'com.kymatic'
+    version = '1.0.0-SNAPSHOT'
+}
+
+ext {
+    testcontainersVersion = '1.18.3'
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'io.spring.dependency-management'
+    repositories {
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
+    }
+    dependencies {
+        testImplementation "org.testcontainers:testcontainers:${testcontainersVersion}"
+    }
+}

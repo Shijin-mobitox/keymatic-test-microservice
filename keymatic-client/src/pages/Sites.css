@@ -1,0 +1,29 @@
+.sites-page {
+  max-width: 1400px;
+}
+
+.site-form {
+  background: white;
+  padding: 2rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+}
+
+.site-form h2 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  color: #1e293b;
+}
+
+.site-form .form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.site-form .form-group input[type="checkbox"] {
+  width: auto;
+  margin-right: 0.5rem;
+}
+

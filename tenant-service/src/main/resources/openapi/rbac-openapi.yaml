@@ -1,0 +1,323 @@
+openapi: 3.0.3
+info:
+  title: KyMatic Tenant RBAC API
+  version: 1.0.0
+  description: >
+    REST APIs for managing multi-site RBAC (roles, permissions, sites, assignments)
+servers:
+  - url: http://localhost:8083
+paths:
+  /api/rbac/sites:
+    post:
+      summary: Create site
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSiteRequest'
+      responses:
+        '201':
+          description: Site created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteResponse'
+    get:
+      summary: List sites
+      responses:
+        '200':
+          description: List of sites
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SiteResponse'
+  /api/rbac/permissions:
+    post:
+      summary: Create permission
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePermissionRequest'
+      responses:
+        '201':
+          description: Permission created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionResponse'
+    get:
+      summary: List permissions
+      responses:
+        '200':
+          description: List of permissions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PermissionResponse'
+  /api/rbac/roles:
+    post:
+      summary: Create role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoleRequest'
+      responses:
+        '201':
+          description: Role created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleResponse'
+    get:
+      summary: List roles
+      responses:
+        '200':
+          description: List of roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoleResponse'
+  /api/rbac/roles/assignments:
+    post:
+      summary: Assign role to user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignRoleRequest'
+      responses:
+        '204':
+          description: Role assigned
+  /api/rbac/site-access:
+    post:
+      summary: Grant site access
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantSiteAccessRequest'
+      responses:
+        '204':
+          description: Access granted
+  /api/rbac/users/{userId}/permissions:
+    get:
+      summary: Get user permissions
+      parameters:
+        - in: path
+          name: userId
+          schema:
+            type: string
+            format: uuid
+          required: true
+        - in: query
+          name: siteId
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPermissionsResponse'
+components:
+  schemas:
+    CreateSiteRequest:
+      type: object
+      required: [siteName, siteCode]
+      properties:
+        siteName:
+          type: string
+        siteCode:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        postalCode:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        headquarters:
+          type: boolean
+    SiteResponse:
+      type: object
+      properties:
+        siteId:
+          type: string
+          format: uuid
+        siteName:
+          type: string
+        siteCode:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        postalCode:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        headquarters:
+          type: boolean
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreatePermissionRequest:
+      type: object
+      required: [permissionKey, permissionName, category, resource, action]
+      properties:
+        permissionKey:
+          type: string
+        permissionName:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        resource:
+          type: string
+        action:
+          type: string
+    PermissionResponse:
+      type: object
+      properties:
+        permissionId:
+          type: string
+          format: uuid
+        permissionKey:
+          type: string
+        permissionName:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        resource:
+          type: string
+        action:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    CreateRoleRequest:
+      type: object
+      required: [roleName, roleKey, permissionKeys]
+      properties:
+        roleName:
+          type: string
+        roleKey:
+          type: string
+        description:
+          type: string
+        level:
+          type: integer
+        systemRole:
+          type: boolean
+        permissionKeys:
+          type: array
+          items:
+            type: string
+    RoleResponse:
+      type: object
+      properties:
+        roleId:
+          type: string
+          format: uuid
+        roleName:
+          type: string
+        roleKey:
+          type: string
+        description:
+          type: string
+        level:
+          type: integer
+        systemRole:
+          type: boolean
+        active:
+          type: boolean
+        permissionKeys:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AssignRoleRequest:
+      type: object
+      required: [userId, roleKey]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        roleKey:
+          type: string
+        siteId:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+    GrantSiteAccessRequest:
+      type: object
+      required: [userId, siteId, accessLevel]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        siteId:
+          type: string
+          format: uuid
+        accessLevel:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    UserPermissionsResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        siteId:
+          type: string
+          format: uuid
+        permissions:
+          type: array
+          items:
+            type: string
+

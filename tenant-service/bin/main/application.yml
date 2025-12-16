@@ -1,0 +1,125 @@
+spring:
+  config:
+    import: "optional:configserver:"
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:root}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-timeout: 10000
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 900000
+      connection-test-query: SELECT 1
+      validation-timeout: 3000
+      leak-detection-threshold: 60000
+      keepalive-time: 30000
+      initialization-fail-timeout: -1
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        # Performance optimizations
+        jdbc:
+          batch_size: 20
+          fetch_size: 50
+        order_inserts: true
+        order_updates: true
+        # Query performance
+        query:
+          in_clause_parameter_padding: true
+        # Enable query plan cache
+        query.plan_cache_max_size: 2048
+        query.plan_parameter_metadata_max_size: 128
+        # Disable second level cache (we're multi-tenant)
+        cache:
+          use_second_level_cache: false
+          use_query_cache: false
+        # Logging for debugging (can be disabled in production)
+        show_sql: false
+        format_sql: false
+        use_sql_comments: false
+        # Statistics for monitoring
+        generate_statistics: false
+  flyway:
+    enabled: true
+    url: ${SPRING_FLYWAY_URL:${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres}}
+    user: ${SPRING_FLYWAY_USER:${SPRING_DATASOURCE_USERNAME:postgres}}
+    password: ${SPRING_FLYWAY_PASSWORD:${SPRING_DATASOURCE_PASSWORD:root}}
+    driver-class-name: org.postgresql.Driver
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    schemas: public
+    validate-on-migrate: false
+  cloud:
+    config:
+      enabled: false
+  # OAuth2 Resource Server configuration for Keycloak JWT validation
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Keycloak issuer URI - used to validate JWT tokens
+          # The realm name should match your Keycloak realm configuration
+          issuer-uri: http://keycloak:8080/realms/kymatic
+          # JWK Set URI - used to fetch public keys for token validation
+          # Spring Boot will auto-configure this from issuer-uri if not specified
+          jwk-set-uri: http://keycloak:8080/realms/kymatic/protocol/openid-connect/certs
+
+# Arconia multi-tenancy configuration
+arconia:
+  tenant:
+    management:
+      enabled: true
+      # Arconia will use TenantContext to determine the current tenant
+      # The tenant ID is extracted from JWT by JwtTenantResolver filter
+
+server:
+  port: 8083
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,mappings
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.kymatic: DEBUG
+    org.springframework.security: DEBUG
+
+# Local JWT authentication configuration
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET:your-256-bit-secret-key-change-this-in-production-minimum-32-characters-long}
+    expiration: 3600 # 1 hour in seconds
+    refresh-expiration: 86400 # 24 hours in seconds
+    issuer: ${APP_JWT_ISSUER:http://localhost:8083}
+
+workflow:
+  service:
+    base-url: ${WORKFLOW_SERVICE_URL:http://localhost:8090}
+
+# SpringDoc OpenAPI configuration
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    try-it-out-enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
+  packages-to-scan: com.kymatic
+  paths-to-match: /**
+  show-actuator: false
+  use-management-port: false

@@ -1,0 +1,22 @@
+.tasks-page {
+  max-width: 1400px;
+}
+
+.task-form {
+  background: white;
+  padding: 2rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+}
+
+.task-form textarea,
+.task-form select,
+.task-form input[type="date"] {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
