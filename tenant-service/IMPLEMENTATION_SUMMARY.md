@@ -185,7 +185,7 @@ curl -H "Authorization: Bearer <token>" \
 - **Java Version**: 21 (as per project requirements, though requirements mention Java 17)
 - **Spring Boot**: 3.2.5
 - **Arconia**: 0.10.1
-- **Keycloak**: 24.0.2
+- **Keycloak**: 26.2.0
 - **Testcontainers**: 1.19.7
 
 ## ✨ Clean Architecture Principles

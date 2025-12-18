@@ -252,7 +252,7 @@ All services are ready for development, testing, and deployment!
 - **Spring Boot 3.2.5**
 - **Arconia 0.10.1**
 - **Spring Security** with OAuth2 Resource Server
-- **Keycloak 24.0.2**
+- **Keycloak 26.2.0**
 - **Testcontainers 1.19.7**
 - **PostgreSQL 16**
 - **Gradle** (multi-module project)

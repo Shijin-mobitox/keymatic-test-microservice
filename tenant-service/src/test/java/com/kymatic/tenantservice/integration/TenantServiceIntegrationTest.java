@@ -45,10 +45,10 @@ class TenantServiceIntegrationTest {
 
     private MockMvc mockMvc;
 
-    // Keycloak container for authentication testing
+    // Keycloak container for authentication testing (aligned with production version)
     @Container
     static GenericContainer<?> keycloak = new GenericContainer<>(
-            DockerImageName.parse("quay.io/keycloak/keycloak:24.0.2"))
+            DockerImageName.parse("quay.io/keycloak/keycloak:26.2.0"))
             .withEnv("KEYCLOAK_ADMIN", "admin")
             .withEnv("KEYCLOAK_ADMIN_PASSWORD", "admin")
             .withCommand("start-dev")

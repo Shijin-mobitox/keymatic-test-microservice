@@ -1,40 +1,38 @@
 import Keycloak from 'keycloak-js'
 
-export type KeycloakInstance = any // Keycloak instance type
-type KeycloakConfig = {
-	url: string
-	realm: string
-	clientId: string
-}
-type KeycloakInitOptions = any // Keycloak init options
+export type KeycloakInstance = any
 
+/**
+ * Creates a Keycloak instance with proper configuration for Keycloak 26.2.0
+ */
 export function createKeycloakInstance(): KeycloakInstance {
-	// Support overriding Keycloak base URL via Vite env for local docker-compose
 	const baseUrl =
 		(import.meta as any).env?.VITE_KEYCLOAK_BASE_URL?.toString() || 'http://localhost:8085/'
-	const config: KeycloakConfig = {
-		url: baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`,
-		realm: 'kymatic', // Single realm for all tenants
+	
+	const config = {
+		url: baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl,
+		realm: 'kymatic',
 		clientId: 'react-client'
 	}
-	// Keycloak can be used as a constructor or function
+	
 	const KC = Keycloak as any
-	return new KC(config) as KeycloakInstance
+	return new KC(config)
 }
 
-// Legacy function for backward compatibility
-export function createKeycloakForTenant(tenant: string): KeycloakInstance {
-	return createKeycloakInstance()
-}
-
-export const defaultInitOptions: KeycloakInitOptions = {
+/**
+ * Default initialization options for Keycloak 26.2.0
+ * 
+ * Key points for Keycloak 26.x:
+ * - PKCE is required for public clients
+ * - Nonce validation changed - use useNonce: false for compatibility
+ * - Use 'standard' flow for PKCE
+ */
+export const defaultInitOptions = {
 	onLoad: 'login-required',
 	pkceMethod: 'S256',
 	checkLoginIframe: false,
-	enableLogging: true, // Enable logging to debug redirect issues
-	responseMode: 'fragment', // Use fragment mode for redirects
-	// Explicitly set redirectUri to match Keycloak configuration
-	redirectUri: typeof window !== 'undefined' ? window.location.origin + window.location.pathname : undefined
+	enableLogging: true,
+	responseMode: 'fragment' as const,
+	flow: 'standard' as const,
+	useNonce: false // Disable nonce validation for Keycloak 26.x compatibility
 }
-
-

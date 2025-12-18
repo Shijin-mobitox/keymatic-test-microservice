@@ -3,7 +3,6 @@ import type { KeycloakTokenParsed } from 'keycloak-js'
 import { createKeycloakInstance, defaultInitOptions } from '@auth/keycloak'
 import { detectTenant } from '@utils/tenantUtils'
 
-// Get the type from the return type of createKeycloakInstance
 type KeycloakInstance = ReturnType<typeof createKeycloakInstance>
 
 type AuthContextValue = {
@@ -39,7 +38,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 	const [error, setError] = useState<string | null>(null)
 	const refreshTimerRef = useRef<number | null>(null)
 	const isInitializingRef = useRef<boolean>(false)
-	const hasProcessedCallbackRef = useRef<boolean>(false)
 
 	const clearRefreshTimer = () => {
 		if (refreshTimerRef.current) {
@@ -48,31 +46,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 		}
 	}
 
-	const scheduleTokenRefresh = useCallback(
-		(instance: KeycloakInstance) => {
-			clearRefreshTimer()
-			refreshTimerRef.current = window.setInterval(() => {
-				instance.updateToken(60).catch(() => {
-					instance.login()
-				})
-			}, 15_000)
-		},
-		[]
-	)
+	const scheduleTokenRefresh = useCallback((instance: KeycloakInstance) => {
+		clearRefreshTimer()
+		refreshTimerRef.current = window.setInterval(() => {
+			instance.updateToken(60).catch(() => {
+				instance.login()
+			})
+		}, 15_000)
+	}, [])
 
 	const updateTenantFromToken = useCallback((tokenParsed: KeycloakTokenParsed | undefined) => {
-		// Extract tenant_id from JWT token claim when available
 		const tenantIdFromToken = (tokenParsed as any)?.tenant_id as string | undefined
-
-		// Fallback: detect tenant from URL / local storage when token doesn't carry it
 		let effectiveTenant = tenantIdFromToken
 		if (!effectiveTenant && typeof window !== 'undefined') {
 			effectiveTenant = detectTenant() || ''
 		}
-
 		const normalizedTenant = effectiveTenant || ''
 		setTenant(normalizedTenant)
-
 		if (typeof window !== 'undefined') {
 			try {
 				if (normalizedTenant) {
@@ -86,172 +76,132 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 		}
 	}, [])
 
-	const initKeycloak = useCallback(
-		async () => {
-			// Prevent multiple simultaneous initializations
-			if (isInitializingRef.current) {
-				console.log('Keycloak: Already initializing, skipping...')
-				return
-			}
-			
-			// Check if we've already processed a callback
-			const hasCode = window.location.search.includes('code=') || window.location.hash.includes('code=')
-			if (hasCode && hasProcessedCallbackRef.current) {
-				console.log('Keycloak: Callback already processed, skipping init')
-				return
-			}
-			
-			isInitializingRef.current = true
-			setError(null)
-			
-			try {
-				const instance = createKeycloakInstance()
-				
-				// Set up event handlers BEFORE init to catch redirect callbacks
-				instance.onAuthSuccess = () => {
-					console.log('Keycloak: Auth success callback')
-					hasProcessedCallbackRef.current = true
-					setIsAuthenticated(true)
-					setToken(instance.token)
-					setUser(instance.tokenParsed)
-					updateTenantFromToken(instance.tokenParsed)
-					
-					// Clear the URL hash after successful authentication
-					// Delay to ensure Keycloak has fully processed the redirect
-					setTimeout(() => {
-						const cleanUrl = window.location.origin + window.location.pathname
-						if (window.location.href !== cleanUrl) {
-							window.history.replaceState(null, '', cleanUrl)
-							console.log('Keycloak: URL cleaned')
-						}
-					}, 500)
-				}
-				
-				instance.onAuthError = (error: any) => {
-					console.error('Keycloak: Auth error', error)
-					setError('Authentication error.')
-				}
-				
-				instance.onTokenExpired = () => {
-					console.log('Keycloak: Token expired, refreshing...')
-					instance
-						.updateToken(60)
-						.then((refreshed: boolean) => {
-							if (refreshed) {
-								setToken(instance.token)
-								setUser(instance.tokenParsed)
-								updateTenantFromToken(instance.tokenParsed)
-							} else {
-								console.log('Keycloak: Token refresh failed, redirecting to login')
-								instance.login()
-							}
-						})
-						.catch((err: any) => {
-							console.error('Keycloak: Token refresh error', err)
-							instance.login()
-						})
-				}
-				
-				instance.onAuthRefreshSuccess = () => {
-					console.log('Keycloak: Token refresh success')
-					setToken(instance.token)
-					setUser(instance.tokenParsed)
-					updateTenantFromToken(instance.tokenParsed)
-				}
-				
-				instance.onAuthLogout = () => {
-					console.log('Keycloak: Logout')
-					setIsAuthenticated(false)
-					setToken(undefined)
-					setUser(undefined)
-			setTenant('')
-			if (typeof window !== 'undefined') {
-				try {
-					window.localStorage.removeItem('tenantOverride')
-				} catch {
-					// ignore storage errors
-				}
-			}
-				}
-				
-				setKeycloak(instance)
+	const initKeycloak = useCallback(async () => {
+		// Prevent multiple simultaneous initializations
+		if (isInitializingRef.current) {
+			return
+		}
 
-				// Check if we're in a redirect callback (has code in URL)
-				const hasCode = window.location.search.includes('code=') || window.location.hash.includes('code=')
-				
-				console.log('Keycloak: Initializing...', { hasCode, hash: window.location.hash.substring(0, 100) })
-				
-				// If we have a code, mark that we're processing a callback
-				if (hasCode) {
-					hasProcessedCallbackRef.current = true
-				}
-				
-				// Use check-sso when we have a code (redirect callback) to prevent redirect loop
-				// Use login-required only when we don't have a code
-				const initOptions = hasCode 
-					? { ...defaultInitOptions, onLoad: 'check-sso' as const }
-					: defaultInitOptions
-				
-				// Initialize Keycloak - it will handle the redirect callback automatically
-				const authenticated = await instance.init(initOptions)
-				
-				console.log('Keycloak: Init result', { authenticated, hasToken: !!instance.token, hasCode })
-				
-				// If we have a token after init, set it
-				if (instance.token) {
+		// If already authenticated, skip
+		if (isAuthenticated && token && keycloak?.token) {
+			return
+		}
+
+		isInitializingRef.current = true
+		setError(null)
+
+		try {
+			// Create or reuse Keycloak instance
+			let instance = keycloak
+			if (!instance) {
+				instance = createKeycloakInstance()
+				setKeycloak(instance)
+			}
+
+			// Set up event handlers (only once)
+			if (!instance.onAuthSuccess) {
+				instance.onAuthSuccess = () => {
+					console.log('Keycloak: Authentication successful')
 					setIsAuthenticated(true)
 					setToken(instance.token)
 					setUser(instance.tokenParsed)
 					updateTenantFromToken(instance.tokenParsed)
 					scheduleTokenRefresh(instance)
 					
-					// Clear URL after a delay to let Keycloak finish processing
-					if (hasCode) {
-						setTimeout(() => {
-							const cleanUrl = window.location.origin + window.location.pathname
-							if (window.location.href !== cleanUrl) {
-								window.history.replaceState(null, '', cleanUrl)
-								console.log('Keycloak: URL cleaned after callback')
-							}
-						}, 500)
+					// Clean URL after successful authentication
+					const cleanUrl = window.location.origin + window.location.pathname
+					if (window.location.href !== cleanUrl) {
+						window.history.replaceState(null, '', cleanUrl)
 					}
-				} else if (!authenticated && !hasCode) {
-					// Only redirect to login if we don't have a code (not in callback)
-					console.log('Keycloak: Not authenticated and no callback, redirecting to login')
-					await instance.login()
-				} else if (hasCode && !authenticated) {
-					// We have a code but no token - Keycloak should process it
-					// Wait a bit longer for the onAuthSuccess callback to fire
-					console.log('Keycloak: Has code but not authenticated yet, waiting for callback...')
-					// The onAuthSuccess handler will be called by Keycloak
 				}
-			} catch (e: any) {
-				console.error('Keycloak: Init error', e)
-				setError(e?.message ?? 'Failed to initialize Keycloak.')
-			} finally {
-				isInitializingRef.current = false
+
+				instance.onAuthError = (error: any) => {
+					console.error('Keycloak: Authentication error', error)
+					setError(error?.errorDescription || error?.error || 'Authentication failed')
+					setIsAuthenticated(false)
+					setToken(undefined)
+					setUser(undefined)
+				}
+
+				instance.onTokenExpired = () => {
+					console.log('Keycloak: Token expired, refreshing...')
+					instance.updateToken(60).then((refreshed: boolean) => {
+						if (refreshed) {
+							setToken(instance.token)
+							setUser(instance.tokenParsed)
+							updateTenantFromToken(instance.tokenParsed)
+						} else {
+							instance.login()
+						}
+					}).catch(() => {
+						instance.login()
+					})
+				}
+
+				instance.onAuthRefreshSuccess = () => {
+					console.log('Keycloak: Token refresh successful')
+					setToken(instance.token)
+					setUser(instance.tokenParsed)
+					updateTenantFromToken(instance.tokenParsed)
+				}
+
+				instance.onAuthLogout = () => {
+					console.log('Keycloak: Logged out')
+					setIsAuthenticated(false)
+					setToken(undefined)
+					setUser(undefined)
+					setTenant('')
+					clearRefreshTimer()
+					if (typeof window !== 'undefined') {
+						try {
+							window.localStorage.removeItem('tenantOverride')
+						} catch {
+							// ignore
+						}
+					}
+				}
 			}
-		},
-		[scheduleTokenRefresh, updateTenantFromToken]
-	)
+
+			// Initialize Keycloak
+			console.log('Keycloak: Initializing...')
+			const authenticated = await instance.init(defaultInitOptions)
+			
+			console.log('Keycloak: Initialization complete', { authenticated, hasToken: !!instance.token })
+
+			if (authenticated && instance.token) {
+				setIsAuthenticated(true)
+				setToken(instance.token)
+				setUser(instance.tokenParsed)
+				updateTenantFromToken(instance.tokenParsed)
+				scheduleTokenRefresh(instance)
+				
+				// Clean URL if it has callback parameters
+				const hasCallback = window.location.search.includes('code=') || 
+				                    window.location.hash.includes('code=') ||
+				                    window.location.hash.includes('state=')
+				if (hasCallback) {
+					const cleanUrl = window.location.origin + window.location.pathname
+					window.history.replaceState(null, '', cleanUrl)
+				}
+			} else if (!authenticated) {
+				// Not authenticated - Keycloak will redirect to login automatically
+				console.log('Keycloak: Not authenticated, redirecting to login...')
+			}
+		} catch (e: any) {
+			console.error('Keycloak: Initialization error', e)
+			setError(e?.message || e?.error || 'Failed to initialize authentication')
+		} finally {
+			isInitializingRef.current = false
+		}
+	}, [keycloak, isAuthenticated, token, scheduleTokenRefresh, updateTenantFromToken])
 
 	useEffect(() => {
-		// Only initialize once, not on every render
-		// Don't initialize if we're in a redirect callback that's already been processed
-		const hasCode = window.location.search.includes('code=') || window.location.hash.includes('code=')
-		
-		if (hasCode && hasProcessedCallbackRef.current) {
-			console.log('Keycloak: Skipping init - callback already processed')
-			return
-		}
-		
 		initKeycloak()
-		
 		return () => {
 			clearRefreshTimer()
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []) // Empty deps - only run once on mount
+	}, []) // Only run once on mount
 
 	const login = useCallback(() => {
 		keycloak?.login()
@@ -270,6 +220,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 	)
 
 	const retry = useCallback(() => {
+		setError(null)
 		initKeycloak()
 	}, [initKeycloak])
 
@@ -308,5 +259,3 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
-
-

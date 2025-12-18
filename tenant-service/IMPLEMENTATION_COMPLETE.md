@@ -18,7 +18,7 @@ This document confirms that **all requirements** for the multi-tenant authentica
 - **Status**: ✅ **Complete**
 - **Location**: `docker-compose.yml`
 - **Configuration**:
-  - Keycloak 24.0.2 with PostgreSQL backend
+  - Keycloak 26.2.0 with PostgreSQL backend
   - `KC_BOOTSTRAP_ADMIN_USERNAME=admin`
   - `KC_BOOTSTRAP_ADMIN_PASSWORD=admin`
   - Realm auto-import from `config/keycloak/realm-export.json`

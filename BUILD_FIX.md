@@ -64,12 +64,12 @@ testImplementation 'org.testcontainers:keycloak:1.19.7'
 
 ## How It Works
 
-The integration tests use `GenericContainer` to run Keycloak:
+The integration tests use `GenericContainer` to run Keycloak (now aligned with production Keycloak 26.2.0):
 
 ```java
 @Container
 static GenericContainer<?> keycloak = new GenericContainer<>(
-        DockerImageName.parse("quay.io/keycloak/keycloak:24.0.2"))
+        DockerImageName.parse("quay.io/keycloak/keycloak:26.2.0"))
         .withEnv("KC_BOOTSTRAP_ADMIN_USERNAME", "admin")
         .withEnv("KC_BOOTSTRAP_ADMIN_PASSWORD", "admin")
         .withCommand("start-dev", "--import-realm")
