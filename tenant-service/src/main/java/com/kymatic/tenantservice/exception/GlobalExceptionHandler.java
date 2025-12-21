@@ -1,5 +1,9 @@
 package com.kymatic.tenantservice.exception;
 
+import com.kymatic.tenantservice.exception.KeycloakException;
+import com.kymatic.tenantservice.exception.OrganizationAlreadyExistsException;
+import com.kymatic.tenantservice.exception.TenantOnboardingException;
+import com.kymatic.tenantservice.exception.UserAlreadyExistsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -8,6 +12,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -60,6 +65,59 @@ public class GlobalExceptionHandler {
         response.put("status", HttpStatus.BAD_REQUEST.value());
         logger.warn("Illegal state: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    @ExceptionHandler(OrganizationAlreadyExistsException.class)
+    public ResponseEntity<Map<String, Object>> handleOrganizationAlreadyExistsException(OrganizationAlreadyExistsException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", ex.getMessage());
+        response.put("status", HttpStatus.CONFLICT.value());
+        
+        logger.warn("Organization already exists: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    @ExceptionHandler(UserAlreadyExistsException.class)
+    public ResponseEntity<Map<String, Object>> handleUserAlreadyExistsException(UserAlreadyExistsException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", ex.getMessage());
+        response.put("status", HttpStatus.CONFLICT.value());
+        
+        logger.warn("User already exists: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    @ExceptionHandler(KeycloakException.class)
+    public ResponseEntity<Map<String, Object>> handleKeycloakException(KeycloakException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Keycloak operation failed: " + ex.getMessage());
+        response.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+        
+        logger.error("Keycloak error", ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, Object>> handleResponseStatusException(ResponseStatusException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", ex.getReason());
+        response.put("status", ex.getStatusCode().value());
+        
+        logger.warn("Response status exception: {} - {}", ex.getStatusCode(), ex.getReason());
+        return ResponseEntity.status(ex.getStatusCode()).body(response);
+    }
+
+    @ExceptionHandler(TenantOnboardingException.class)
+    public ResponseEntity<Map<String, Object>> handleTenantOnboardingException(TenantOnboardingException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", ex.getMessage());
+        response.put("tenantAlias", ex.getTenantAlias());
+        response.put("failedStep", ex.getFailedStep().name());
+        response.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+        
+        logger.error("Tenant onboarding failed: tenantAlias={}, step={}", 
+            ex.getTenantAlias(), ex.getFailedStep(), ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 
     @ExceptionHandler(Exception.class)

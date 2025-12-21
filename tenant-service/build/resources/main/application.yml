@@ -108,6 +108,20 @@ workflow:
   service:
     base-url: ${WORKFLOW_SERVICE_URL:http://localhost:8090}
 
+# Keycloak Admin Client configuration for Organizations API
+keycloak:
+  admin:
+    server-url: ${KEYCLOAK_SERVER_URL:http://keycloak:8080}
+    realm: ${KEYCLOAK_REALM:kymatic}
+    client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:admin-cli}
+    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:}
+    username: ${KEYCLOAK_ADMIN_USERNAME:admin}
+    password: ${KEYCLOAK_ADMIN_PASSWORD:admin}
+    # Use client credentials grant type for service account authentication
+    grant-type: ${KEYCLOAK_ADMIN_GRANT_TYPE:password}
+    # Connection pool settings
+    connection-pool-size: ${KEYCLOAK_ADMIN_POOL_SIZE:10}
+
 # SpringDoc OpenAPI configuration
 springdoc:
   api-docs:

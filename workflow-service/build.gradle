@@ -33,6 +33,16 @@ dependencies {
     runtimeOnly 'org.postgresql:postgresql:42.7.2'
     runtimeOnly 'com.h2database:h2'
 
+    // Keycloak Admin Client for Organizations API (Keycloak >= 26)
+    implementation 'org.keycloak:keycloak-admin-client:26.0.0'
+    // Jakarta REST API for Keycloak Admin Client
+    implementation 'jakarta.ws.rs:jakarta.ws.rs-api:3.1.0'
+    implementation 'org.jboss.resteasy:resteasy-client:6.2.8.Final'
+    implementation 'org.jboss.resteasy:resteasy-jackson2-provider:6.2.8.Final'
+    
+    // Flyway for database migrations
+    implementation 'org.flywaydb:flyway-core:9.22.3'
+
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.camunda.bpm.springboot:camunda-bpm-spring-boot-starter-test:7.21.0'
 }

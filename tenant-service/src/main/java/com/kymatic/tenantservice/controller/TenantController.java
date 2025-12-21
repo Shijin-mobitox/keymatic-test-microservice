@@ -1,10 +1,14 @@
 package com.kymatic.tenantservice.controller;
 
+import com.kymatic.tenantservice.dto.CreateTenantRequest;
+import com.kymatic.tenantservice.dto.CreateUserRequest;
 import com.kymatic.tenantservice.dto.TenantMigrationResponse;
+import com.kymatic.tenantservice.dto.TenantOnboardingResponse;
 import com.kymatic.tenantservice.dto.TenantRequest;
 import com.kymatic.tenantservice.dto.TenantResponse;
 import com.kymatic.tenantservice.dto.TenantStatusUpdateRequest;
 import com.kymatic.tenantservice.dto.TenantStatusUpdateResponse;
+import com.kymatic.tenantservice.dto.UserOnboardingResponse;
 import com.kymatic.tenantservice.dto.workflow.WorkflowProcessResponse;
 import com.kymatic.tenantservice.persistence.entity.TenantEntity;
 import com.kymatic.tenantservice.persistence.entity.TenantMigrationEntity;
@@ -41,30 +45,77 @@ public class TenantController {
 
 	private final TenantProvisioningService tenantProvisioningService;
 	private final WorkflowOrchestrationService workflowOrchestrationService;
+	private final com.kymatic.tenantservice.service.TenantOnboardingService tenantOnboardingService;
 
 	public TenantController(
 		TenantProvisioningService tenantProvisioningService,
-		WorkflowOrchestrationService workflowOrchestrationService
+		WorkflowOrchestrationService workflowOrchestrationService,
+		com.kymatic.tenantservice.service.TenantOnboardingService tenantOnboardingService
 	) {
 		this.tenantProvisioningService = tenantProvisioningService;
 		this.workflowOrchestrationService = workflowOrchestrationService;
+		this.tenantOnboardingService = tenantOnboardingService;
 	}
 
 	@Operation(
-		summary = "Provision a new tenant",
-		description = "Creates a new tenant record in the master database and initializes a per-tenant database.",
+		summary = "Provision a new tenant (legacy - without Keycloak Organizations)",
+		description = "Creates a new tenant record in the master database and initializes a per-tenant database. " +
+			"This endpoint does NOT create a Keycloak organization. Use POST /api/tenants/onboard for full Keycloak integration.",
 		responses = {
 			@ApiResponse(responseCode = "201", description = "Tenant created",
 				content = @Content(schema = @Schema(implementation = TenantResponse.class))),
 			@ApiResponse(responseCode = "400", description = "Invalid input")
 		}
 	)
-	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<TenantResponse> createTenant(
+	@PostMapping(value = "/legacy", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<TenantResponse> createTenantLegacy(
 		@Valid @RequestBody TenantRequest request
 	) {
 		TenantEntity tenant = tenantProvisioningService.createTenant(request);
 		return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(tenant));
+	}
+
+	@Operation(
+		summary = "Onboard a new tenant with Keycloak Organizations",
+		description = "Creates a new tenant with full Keycloak Organizations integration: " +
+			"1. Creates organization in Keycloak, " +
+			"2. Creates and initializes tenant database, " +
+			"3. Creates initial admin user in Keycloak and assigns to organization. " +
+			"This is the recommended endpoint for new tenant creation.",
+		responses = {
+			@ApiResponse(responseCode = "201", description = "Tenant onboarded successfully",
+				content = @Content(schema = @Schema(implementation = TenantOnboardingResponse.class))),
+			@ApiResponse(responseCode = "400", description = "Invalid input"),
+			@ApiResponse(responseCode = "409", description = "Tenant or organization already exists")
+		}
+	)
+	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<TenantOnboardingResponse> createTenant(
+		@Valid @RequestBody CreateTenantRequest request
+	) {
+		TenantOnboardingResponse response = tenantOnboardingService.createTenant(request);
+		return ResponseEntity.status(HttpStatus.CREATED).body(response);
+	}
+
+	@Operation(
+		summary = "Create a new user under a tenant (organization)",
+		description = "Creates a new user in Keycloak and assigns them to the tenant's organization. " +
+			"The tenant is identified by its slug (organization alias).",
+		responses = {
+			@ApiResponse(responseCode = "201", description = "User created successfully",
+				content = @Content(schema = @Schema(implementation = UserOnboardingResponse.class))),
+			@ApiResponse(responseCode = "400", description = "Invalid input"),
+			@ApiResponse(responseCode = "404", description = "Tenant not found"),
+			@ApiResponse(responseCode = "409", description = "User already exists")
+		}
+	)
+	@PostMapping(value = "/{tenantAlias}/users", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<UserOnboardingResponse> createUserForTenant(
+		@Parameter(description = "Tenant alias (slug)") @PathVariable String tenantAlias,
+		@Valid @RequestBody CreateUserRequest request
+	) {
+		UserOnboardingResponse response = tenantOnboardingService.createUserForTenant(tenantAlias, request);
+		return ResponseEntity.status(HttpStatus.CREATED).body(response);
 	}
 
 	@Operation(

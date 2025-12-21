@@ -1,6 +1,6 @@
 services:
   keycloak:
-    image: quay.io/keycloak/keycloak:26.2.0
+    image: quay.io/keycloak/keycloak:25.0.0
     command: start-dev --import-realm
     environment:
       # Bootstrap admin credentials for Keycloak
@@ -11,7 +11,7 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: admin
       # Database configuration
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres-db:5432/postgres
+      KC_DB_URL: jdbc:postgresql://postgres-db:5432/keycloak
       KC_DB_USERNAME: postgres
       KC_DB_PASSWORD: root
       # Hostname and proxy configuration for cross-origin cookie support

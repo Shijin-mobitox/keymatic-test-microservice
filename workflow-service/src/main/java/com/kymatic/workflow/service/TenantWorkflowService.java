@@ -26,16 +26,25 @@ public class TenantWorkflowService {
 
     public WorkflowProcessResponse startTenantProvisioning(TenantRequest request) {
         Map<String, Object> variables = new HashMap<>();
+        // Tenant information
         variables.put("tenantName", request.tenantName());
         variables.put("slug", request.slug());
         variables.put("subscriptionTier", request.subscriptionTier());
         variables.put("maxUsers", request.maxUsers());
         variables.put("maxStorageGb", request.maxStorageGb());
-        variables.put("adminEmail", request.adminEmail());
         variables.put("metadata", request.metadata());
+        
+        // Admin user information for Keycloak
+        variables.put("adminEmail", request.adminEmail());
+        variables.put("adminPassword", request.adminPassword());
+        variables.put("adminFirstName", request.adminFirstName());
+        variables.put("adminLastName", request.adminLastName());
+        variables.put("adminEmailVerified", request.adminEmailVerified());
+        variables.put("adminRole", "admin"); // Default role
 
         ProcessInstance instance = runtimeService.startProcessInstanceByKey("tenant-provisioning", variables);
-        logger.info("Started tenant provisioning workflow instance {}", instance.getId());
+        logger.info("Started tenant provisioning workflow instance {} for tenant slug: {}", 
+            instance.getId(), request.slug());
         return WorkflowProcessResponse.started(instance.getId());
     }
 

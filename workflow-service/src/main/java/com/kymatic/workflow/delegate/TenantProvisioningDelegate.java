@@ -31,6 +31,10 @@ public class TenantProvisioningDelegate implements JavaDelegate {
         Integer maxUsers = (Integer) execution.getVariable("maxUsers");
         Integer maxStorageGb = (Integer) execution.getVariable("maxStorageGb");
         String adminEmail = (String) execution.getVariable("adminEmail");
+        String adminPassword = (String) execution.getVariable("adminPassword");
+        String adminFirstName = (String) execution.getVariable("adminFirstName");
+        String adminLastName = (String) execution.getVariable("adminLastName");
+        Boolean adminEmailVerified = (Boolean) execution.getVariable("adminEmailVerified");
         Object metadata = execution.getVariable("metadata");
 
         TenantRequest request = new TenantRequest(
@@ -39,7 +43,11 @@ public class TenantProvisioningDelegate implements JavaDelegate {
             subscriptionTier,
             maxUsers,
             maxStorageGb,
-            adminEmail,
+            adminEmail != null ? adminEmail : "admin@" + slug + ".com", // adminEmail - default if not provided
+            adminPassword != null ? adminPassword : "TempPassword123!", // adminPassword - default if not provided
+            adminFirstName != null ? adminFirstName : "Admin", // adminFirstName - default if not provided
+            adminLastName != null ? adminLastName : "User", // adminLastName - default if not provided
+            adminEmailVerified != null ? adminEmailVerified : false, // adminEmailVerified
             metadata == null ? null : objectMapper.valueToTree(metadata)
         );
 

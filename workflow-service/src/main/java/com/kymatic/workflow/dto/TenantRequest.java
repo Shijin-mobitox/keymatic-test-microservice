@@ -27,8 +27,27 @@ public record TenantRequest(
     Integer maxStorageGb,
 
     @Email
+    @NotBlank
     String adminEmail,
 
+    @NotBlank
+    @Size(min = 8)
+    String adminPassword,
+
+    @NotBlank
+    @Size(max = 255)
+    String adminFirstName,
+
+    @NotBlank
+    @Size(max = 255)
+    String adminLastName,
+
+    Boolean adminEmailVerified,
+
     JsonNode metadata
-) {}
+) {
+    public Boolean adminEmailVerified() {
+        return adminEmailVerified != null ? adminEmailVerified : false;
+    }
+}
 

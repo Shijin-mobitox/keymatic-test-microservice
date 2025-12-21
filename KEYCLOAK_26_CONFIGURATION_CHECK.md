@@ -153,3 +153,4 @@ Write-Host "Web Origins: $($client[0].webOrigins -join ', ')" -ForegroundColor G
 If all values match what's expected, you're good to go! 🎉
 
 
+

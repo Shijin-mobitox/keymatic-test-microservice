@@ -26,6 +26,12 @@ dependencies {
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
     implementation 'com.querydsl:querydsl-jpa:5.0.0:jakarta'
     implementation 'org.hibernate:hibernate-envers:6.4.4.Final'
+    // Keycloak Admin Client for Organizations API (Keycloak >= 26)
+    implementation 'org.keycloak:keycloak-admin-client:26.0.0'
+    // Jakarta REST API for Keycloak Admin Client
+    implementation 'jakarta.ws.rs:jakarta.ws.rs-api:3.1.0'
+    implementation 'org.jboss.resteasy:resteasy-client:6.2.8.Final'
+    implementation 'org.jboss.resteasy:resteasy-jackson2-provider:6.2.8.Final'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.testcontainers:junit-jupiter:1.19.7'

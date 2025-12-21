@@ -1,18 +1,50 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.0.0">
-  <bpmn:process id="tenant-provisioning" name="Tenant Provisioning" isExecutable="true" camunda:historyTimeToLive="30">
+  <bpmn:process id="tenant-provisioning" name="Tenant Provisioning with Keycloak Organizations" isExecutable="true" camunda:historyTimeToLive="30">
     <bpmn:startEvent id="StartEvent_1" name="Start Provisioning">
       <bpmn:outgoing>Flow_1</bpmn:outgoing>
     </bpmn:startEvent>
-    <bpmn:serviceTask id="ServiceTask_ProvisionTenant" name="Provision Tenant" camunda:delegateExpression="${tenantProvisioningDelegate}">
+    
+    <!-- Step 1: Create Organization in Keycloak -->
+    <bpmn:serviceTask id="ServiceTask_CreateOrganization" name="Create Organization in Keycloak" camunda:delegateExpression="${organizationCreationDelegate}">
       <bpmn:incoming>Flow_1</bpmn:incoming>
       <bpmn:outgoing>Flow_2</bpmn:outgoing>
     </bpmn:serviceTask>
-    <bpmn:endEvent id="EndEvent_1" name="Provisioning Complete">
+    
+    <!-- Step 2: Create Database -->
+    <bpmn:serviceTask id="ServiceTask_CreateDatabase" name="Create Tenant Database" camunda:delegateExpression="${databaseCreationDelegate}">
       <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    
+    <!-- Step 3: Create User in Keycloak -->
+    <bpmn:serviceTask id="ServiceTask_CreateUser" name="Create Admin User in Keycloak" camunda:delegateExpression="${userCreationDelegate}">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:serviceTask>
+    
+    <!-- Step 4: Assign User to Organization -->
+    <bpmn:serviceTask id="ServiceTask_AssignUser" name="Assign User to Organization" camunda:delegateExpression="${userAssignmentDelegate}">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+    </bpmn:serviceTask>
+    
+    <!-- Step 5: Save Tenant Record -->
+    <bpmn:serviceTask id="ServiceTask_SaveTenantRecord" name="Save Tenant Record" camunda:delegateExpression="${saveTenantRecordDelegate}">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:serviceTask>
+    
+    <bpmn:endEvent id="EndEvent_1" name="Provisioning Complete">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
     </bpmn:endEvent>
-    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="ServiceTask_ProvisionTenant" />
-    <bpmn:sequenceFlow id="Flow_2" sourceRef="ServiceTask_ProvisionTenant" targetRef="EndEvent_1" />
+    
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="ServiceTask_CreateOrganization" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="ServiceTask_CreateOrganization" targetRef="ServiceTask_CreateDatabase" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="ServiceTask_CreateDatabase" targetRef="ServiceTask_CreateUser" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="ServiceTask_CreateUser" targetRef="ServiceTask_AssignUser" />
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="ServiceTask_AssignUser" targetRef="ServiceTask_SaveTenantRecord" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="ServiceTask_SaveTenantRecord" targetRef="EndEvent_1" />
   </bpmn:process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="tenant-provisioning">
@@ -22,14 +54,30 @@
           <dc:Bounds x="155" y="142" width="84" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Activity_1" bpmnElement="ServiceTask_ProvisionTenant">
+      <bpmndi:BPMNShape id="Activity_1" bpmnElement="ServiceTask_CreateOrganization">
         <dc:Bounds x="270" y="77" width="100" height="80" />
         <bpmndi:BPMNLabel />
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_2" bpmnElement="ServiceTask_CreateDatabase">
+        <dc:Bounds x="420" y="77" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_3" bpmnElement="ServiceTask_CreateUser">
+        <dc:Bounds x="570" y="77" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_4" bpmnElement="ServiceTask_AssignUser">
+        <dc:Bounds x="720" y="77" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_5" bpmnElement="ServiceTask_SaveTenantRecord">
+        <dc:Bounds x="870" y="77" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_1" bpmnElement="EndEvent_1">
-        <dc:Bounds x="432" y="99" width="36" height="36" />
+        <dc:Bounds x="1020" y="99" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="420" y="142" width="60" height="14" />
+          <dc:Bounds x="1008" y="142" width="60" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">
@@ -38,9 +86,24 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2">
         <di:waypoint x="370" y="117" />
-        <di:waypoint x="432" y="117" />
+        <di:waypoint x="420" y="117" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3">
+        <di:waypoint x="520" y="117" />
+        <di:waypoint x="570" y="117" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4">
+        <di:waypoint x="670" y="117" />
+        <di:waypoint x="720" y="117" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_5_di" bpmnElement="Flow_5">
+        <di:waypoint x="820" y="117" />
+        <di:waypoint x="870" y="117" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_6_di" bpmnElement="Flow_6">
+        <di:waypoint x="970" y="117" />
+        <di:waypoint x="1020" y="117" />
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 </bpmn:definitions>
-

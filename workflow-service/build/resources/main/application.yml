@@ -37,6 +37,24 @@ workflow:
   tenant-service:
     base-url: ${TENANT_SERVICE_URL:http://tenant-service:8080}
 
+# Keycloak Admin Client configuration for Organizations API
+keycloak:
+  admin:
+    server-url: ${KEYCLOAK_SERVER_URL:http://keycloak:8080}
+    realm: ${KEYCLOAK_REALM:kymatic}
+    client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:admin-cli}
+    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:}
+    username: ${KEYCLOAK_ADMIN_USERNAME:admin}
+    password: ${KEYCLOAK_ADMIN_PASSWORD:admin}
+    grant-type: ${KEYCLOAK_ADMIN_GRANT_TYPE:password}
+
+# Database configuration for tenant database creation
+tenant-database:
+  base-url: ${TENANT_DB_BASE_URL:jdbc:postgresql://localhost:5432}
+  username: ${TENANT_DB_USERNAME:postgres}
+  password: ${TENANT_DB_PASSWORD:root}
+  migration-locations: classpath:db/tenant
+
 logging:
   level:
     root: INFO
