@@ -46,15 +46,18 @@ public class TenantController {
 	private final TenantProvisioningService tenantProvisioningService;
 	private final WorkflowOrchestrationService workflowOrchestrationService;
 	private final com.kymatic.tenantservice.service.TenantOnboardingService tenantOnboardingService;
+	private final com.kymatic.tenantservice.client.KeycloakClientWrapper keycloakClientWrapper;
 
 	public TenantController(
 		TenantProvisioningService tenantProvisioningService,
 		WorkflowOrchestrationService workflowOrchestrationService,
-		com.kymatic.tenantservice.service.TenantOnboardingService tenantOnboardingService
+		com.kymatic.tenantservice.service.TenantOnboardingService tenantOnboardingService,
+		com.kymatic.tenantservice.client.KeycloakClientWrapper keycloakClientWrapper
 	) {
 		this.tenantProvisioningService = tenantProvisioningService;
 		this.workflowOrchestrationService = workflowOrchestrationService;
 		this.tenantOnboardingService = tenantOnboardingService;
+		this.keycloakClientWrapper = keycloakClientWrapper;
 	}
 
 	@Operation(
@@ -280,5 +283,48 @@ public class TenantController {
 			entity.getStatus(),
 			entity.getAppliedAt()
 		);
+	}
+
+	@Operation(
+		summary = "Manually assign user to organization", 
+		description = "Assigns a user to an organization in Keycloak. Useful for fixing failed automatic assignments during tenant creation.",
+		responses = {
+			@ApiResponse(responseCode = "200", description = "User assigned successfully"),
+			@ApiResponse(responseCode = "400", description = "Invalid input or assignment failed"),
+			@ApiResponse(responseCode = "404", description = "Organization or user not found")
+		}
+	)
+	@PostMapping("/{slug}/assign-user")
+	public ResponseEntity<Map<String, Object>> assignUserToOrganization(
+		@Parameter(description = "Organization alias (slug)") @PathVariable String slug,
+		@Parameter(description = "User email to assign") @RequestParam String userEmail
+	) {
+		try {
+			boolean success = keycloakClientWrapper.manuallyAssignUserToOrganization(slug, userEmail);
+			
+			if (success) {
+				return ResponseEntity.ok(Map.of(
+					"success", true,
+					"message", "User successfully assigned to organization",
+					"organizationSlug", slug,
+					"userEmail", userEmail
+				));
+			} else {
+				return ResponseEntity.badRequest().body(Map.of(
+					"success", false,
+					"message", "Failed to assign user to organization",
+					"organizationSlug", slug,
+					"userEmail", userEmail,
+					"suggestion", "Try the manual GUI method: http://localhost:8085 → kymatic realm → Organizations → " + slug + " → Members"
+				));
+			}
+		} catch (Exception e) {
+			return ResponseEntity.badRequest().body(Map.of(
+				"success", false,
+				"message", "Error during assignment: " + e.getMessage(),
+				"organizationSlug", slug,
+				"userEmail", userEmail
+			));
+		}
 	}
 }

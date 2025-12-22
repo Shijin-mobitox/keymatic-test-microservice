@@ -7,7 +7,6 @@ import com.kymatic.tenantservice.dto.CreateTenantRequest;
 import com.kymatic.tenantservice.dto.CreateUserRequest;
 import com.kymatic.tenantservice.dto.TenantOnboardingResponse;
 import com.kymatic.tenantservice.dto.UserOnboardingResponse;
-import com.kymatic.tenantservice.exception.KeycloakException;
 import com.kymatic.tenantservice.exception.OrganizationAlreadyExistsException;
 import com.kymatic.tenantservice.exception.TenantOnboardingException;
 import com.kymatic.tenantservice.exception.UserAlreadyExistsException;
@@ -17,6 +16,7 @@ import com.kymatic.tenantservice.persistence.repository.TenantMigrationRepositor
 import com.kymatic.tenantservice.persistence.repository.TenantRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,19 +50,24 @@ public class TenantOnboardingService {
 	private final TenantDatabaseManager tenantDatabaseManager;
 	private final KeycloakClientWrapper keycloakClientWrapper;
 	private final ObjectMapper objectMapper;
+	
+	@Value("${keycloak.admin.organization-cleanup-enabled:false}")
+	private final boolean organizationCleanupEnabled;
 
 	public TenantOnboardingService(
 		TenantRepository tenantRepository,
 		TenantMigrationRepository tenantMigrationRepository,
 		TenantDatabaseManager tenantDatabaseManager,
 		KeycloakClientWrapper keycloakClientWrapper,
-		ObjectMapper objectMapper
+		ObjectMapper objectMapper,
+		@Value("${keycloak.admin.organization-cleanup-enabled:false}") boolean organizationCleanupEnabled
 	) {
 		this.tenantRepository = tenantRepository;
 		this.tenantMigrationRepository = tenantMigrationRepository;
 		this.tenantDatabaseManager = tenantDatabaseManager;
 		this.keycloakClientWrapper = keycloakClientWrapper;
 		this.objectMapper = objectMapper;
+		this.organizationCleanupEnabled = organizationCleanupEnabled;
 	}
 
 	/**
@@ -115,32 +120,48 @@ public class TenantOnboardingService {
 				"Tenant with slug '" + request.slug() + "' already exists");
 		});
 
-		// Use Groups instead of Organizations (stable approach for all Keycloak versions)
-		String keycloakGroupId = null;
+		// Use Organizations feature (following Skycloak best practices for Keycloak 26.2.4)
+		String keycloakOrgId = null;
 		String adminUserId = null;
 		TenantEntity tenantEntity = null;
 
 		try {
-			// Step 1: Create group in Keycloak (using Groups instead of Organizations)
-			logger.info("Step 1: Creating group in Keycloak: name={}", request.slug());
-			keycloakGroupId = keycloakClientWrapper.createGroup(request.slug(), "Tenant group for " + request.tenantName());
-			logger.info("Group created in Keycloak: id={}, name={}", keycloakGroupId, request.slug());
+			// Step 1: Create admin user in Keycloak first (required for organization membership)
+			logger.info("Step 1: Creating admin user in Keycloak: email={}", adminUser.email());
+			adminUserId = keycloakClientWrapper.createUser(
+				adminUser.email(),
+				adminUser.password(),
+				adminUser.firstName(),
+				adminUser.lastName(),
+				adminUser.emailVerified()
+			);
+			logger.info("Admin user created in Keycloak: id={}, email={}", adminUserId, adminUser.email());
 
-			// Step 2: Create tenant database
-			logger.info("Step 2: Creating tenant database: slug={}", request.slug());
+			// Step 2: Create organization with user as member (atomic operation - no delays needed!)
+			logger.info("Step 2: Creating organization with user as member: alias={}", request.slug());
+			if (organizationCleanupEnabled) {
+				logger.info("Organization cleanup enabled - using cleanup method with user membership for: {}", request.slug());
+				keycloakOrgId = keycloakClientWrapper.createOrganizationWithCleanupAndUser(request.slug(), request.tenantName(), adminUserId);
+			} else {
+				keycloakOrgId = keycloakClientWrapper.createOrganizationWithUser(request.slug(), request.tenantName(), adminUserId);
+			}
+			logger.info("Organization created with user membership: id={}, alias={}, adminUserId={}", keycloakOrgId, request.slug(), adminUserId);
+
+			// Step 3: Create tenant database
+			logger.info("Step 3: Creating tenant database: slug={}", request.slug());
 			String databaseName = buildDatabaseNameFromSlug(request.slug());
 			String jdbcUrl = buildTenantJdbcUrl(databaseName);
 
 			tenantDatabaseManager.createDatabaseIfNotExists(databaseName);
 			logger.info("Database created: {}", databaseName);
 
-			// Step 3: Run database migrations
-			logger.info("Step 3: Running database migrations: database={}", databaseName);
+			// Step 4: Run database migrations
+			logger.info("Step 4: Running database migrations: database={}", databaseName);
 			List<String> appliedVersions = tenantDatabaseManager.migrateTenantDatabase(databaseName);
 			logger.info("Migrations applied: versions={}", appliedVersions);
 
-			// Step 4: Save tenant record in master database
-			logger.info("Step 4: Saving tenant record in master database");
+			// Step 5: Save tenant record in master database
+			logger.info("Step 5: Saving tenant record in master database");
 			tenantEntity = new TenantEntity();
 			tenantEntity.setTenantName(request.tenantName());
 			tenantEntity.setSlug(request.slug());
@@ -156,53 +177,17 @@ public class TenantOnboardingService {
 			recordMigrations(saved.getTenantId(), appliedVersions, "success");
 			logger.info("Tenant record saved: id={}", saved.getTenantId());
 
-			// Step 5: Create admin user in Keycloak
-			logger.info("Step 5: Creating admin user in Keycloak: email={}", adminUser.email());
-			adminUserId = keycloakClientWrapper.createUser(
-				adminUser.email(),
-				adminUser.password(),
-				adminUser.firstName(),
-				adminUser.lastName(),
-				adminUser.emailVerified()
-			);
-			logger.info("Admin user created in Keycloak: id={}, email={}", adminUserId, adminUser.email());
+			// Note: User is already assigned to organization during creation - no delays or separate assignment needed!
+			logger.info("✅ User-organization assignment completed atomically during creation");
 
-			// Wait for Keycloak to fully index the user before organization assignment
-			// This helps prevent "User does not exist" errors during assignment
-			// Increased wait time based on observed timing issues
-			try {
-				logger.info("Waiting 8 seconds for Keycloak to fully index user before organization assignment...");
-				Thread.sleep(8000);
-				
-				// Additional verification that user exists before attempting assignment
-				logger.info("Verifying user exists in Keycloak before organization assignment: userId={}", adminUserId);
-				boolean userExists = keycloakClientWrapper.verifyUserExists(adminUserId);
-				if (!userExists) {
-					throw new KeycloakException("User verification failed: User does not exist in Keycloak with ID: " + adminUserId);
-				}
-				logger.info("User verification successful, proceeding with organization assignment");
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				throw new KeycloakException("Interrupted while waiting for user indexing", e);
-			}
-
-			// Step 6: Assign user to group (using Groups instead of Organizations)
-			logger.info("Step 6: Assigning user to group: userId={}, groupId={}", adminUserId, keycloakGroupId);
-			keycloakClientWrapper.assignUserToGroup(keycloakGroupId, adminUserId);
-			logger.info("User assigned to group successfully");
-
-			// Step 7: Assign admin role to user (optional - skip for Groups approach)
-			// Note: Role assignment can be handled separately if needed
-			logger.info("Step 7: Skipping role assignment (using Groups approach)");
-
-			logger.info("Tenant onboarding completed successfully: slug={}, tenantId={}, groupId={}", 
-				request.slug(), saved.getTenantId(), keycloakGroupId);
+			logger.info("Tenant onboarding completed successfully: slug={}, tenantId={}, orgId={}", 
+				request.slug(), saved.getTenantId(), keycloakOrgId);
 
 			return new TenantOnboardingResponse(
 				saved.getTenantId(),
 				saved.getTenantName(),
 				saved.getSlug(),
-				keycloakGroupId, // Using groupId instead of orgId
+				keycloakOrgId, // Using proper organizationId
 				request.slug(),
 				saved.getDatabaseName(),
 				saved.getDatabaseConnectionString(),
@@ -220,11 +205,11 @@ public class TenantOnboardingService {
 			logger.error("Tenant onboarding failed: slug={}", request.slug(), e);
 			
 			// Rollback/compensation logic
-			performRollback(keycloakGroupId, adminUserId, tenantEntity, request.slug());
+			performRollback(keycloakOrgId, adminUserId, tenantEntity, request.slug());
 			
 			// Determine which step failed
 			TenantOnboardingException.OnboardingStep failedStep = determineFailedStep(
-				keycloakGroupId, adminUserId, tenantEntity);
+				keycloakOrgId, adminUserId, tenantEntity);
 			
 			throw new TenantOnboardingException(
 				request.slug(),
@@ -253,7 +238,7 @@ public class TenantOnboardingService {
 	/**
 	 * Performs rollback/compensation for failed tenant onboarding.
 	 */
-	private void performRollback(String keycloakGroupId, String adminUserId, TenantEntity tenantEntity, String slug) {
+	private void performRollback(String keycloakOrgId, String adminUserId, TenantEntity tenantEntity, String slug) {
 		logger.info("Performing rollback for failed tenant onboarding: slug={}", slug);
 
 		// Rollback in reverse order of creation
@@ -280,14 +265,14 @@ public class TenantOnboardingService {
 			}
 		}
 
-		// 3. Delete group from Keycloak (if created)
-		if (keycloakGroupId != null && !keycloakGroupId.equals("SKIPPED")) {
+		// 3. Delete organization from Keycloak (if created)
+		if (keycloakOrgId != null) {
 			try {
-				logger.info("Rollback: Deleting group from Keycloak: groupId={}", keycloakGroupId);
-				keycloakClientWrapper.deleteGroup(keycloakGroupId);
-				logger.info("Rollback: Group deleted from Keycloak");
+				logger.info("Rollback: Deleting organization from Keycloak: orgId={}", keycloakOrgId);
+				keycloakClientWrapper.deleteOrganization(keycloakOrgId);
+				logger.info("Rollback: Organization deleted from Keycloak");
 			} catch (Exception e) {
-				logger.error("Rollback: Failed to delete group from Keycloak: groupId={}", keycloakGroupId, e);
+				logger.error("Rollback: Failed to delete organization from Keycloak: orgId={}", keycloakOrgId, e);
 			}
 		}
 
@@ -301,10 +286,10 @@ public class TenantOnboardingService {
 	 * Determines which step failed during onboarding.
 	 */
 	private TenantOnboardingException.OnboardingStep determineFailedStep(
-		String keycloakGroupId, String adminUserId, TenantEntity tenantEntity) {
+		String keycloakOrgId, String adminUserId, TenantEntity tenantEntity) {
 		
-		if (keycloakGroupId == null) {
-			return TenantOnboardingException.OnboardingStep.KEYCLOAK_ORG_CREATION; // Keep same enum for compatibility
+		if (keycloakOrgId == null) {
+			return TenantOnboardingException.OnboardingStep.KEYCLOAK_ORG_CREATION;
 		}
 		if (tenantEntity == null || tenantEntity.getDatabaseName() == null) {
 			return TenantOnboardingException.OnboardingStep.DATABASE_CREATION;
@@ -312,7 +297,7 @@ public class TenantOnboardingService {
 		if (adminUserId == null) {
 			return TenantOnboardingException.OnboardingStep.USER_CREATION;
 		}
-		return TenantOnboardingException.OnboardingStep.USER_ORG_ASSIGNMENT; // Keep same enum for compatibility
+		return TenantOnboardingException.OnboardingStep.USER_ORG_ASSIGNMENT;
 	}
 
 	private void validateSlug(String slug) {

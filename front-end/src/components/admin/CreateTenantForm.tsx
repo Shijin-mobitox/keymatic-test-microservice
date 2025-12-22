@@ -19,41 +19,103 @@ export function CreateTenantForm({ token, onSuccess, onCancel }: CreateTenantFor
 		maxUsers: 10,
 		maxStorageGb: 10,
 		adminEmail: '',
+		adminPassword: 'SecurePass123!',
+		adminFirstName: 'Admin',
+		adminLastName: 'User',
 	})
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
+	const [retryAttempts, setRetryAttempts] = useState(0)
+	const MAX_RETRY_ATTEMPTS = 2
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
 		setLoading(true)
 		setError(null)
 
-		try {
-			// Auto-generate slug from tenant name if not provided
-			const slug = formData.slug || formData.tenantName.toLowerCase()
-				.replace(/[^a-z0-9-]/g, '-')
-				.replace(/-+/g, '-')
-				.replace(/^-|-$/g, '')
+		const attemptCreateTenant = async (attempt: number = 0): Promise<void> => {
+			try {
+				// Auto-generate slug from tenant name if not provided
+				const baseSlug = formData.slug || formData.tenantName.toLowerCase()
+					.replace(/[^a-z0-9-]/g, '-')
+					.replace(/-+/g, '-')
+					.replace(/^-|-$/g, '')
 
-			const tenant = await tenantService.createTenant(token, {
-				tenantName: formData.tenantName,
-				slug: slug,
-				subscriptionTier: formData.subscriptionTier,
-				maxUsers: formData.maxUsers,
-				maxStorageGb: formData.maxStorageGb,
-				adminEmail: formData.adminEmail || undefined,
-			})
-			onSuccess(tenant)
+				// Add suffix for retry attempts to make slug unique
+				const slug = attempt > 0 ? `${baseSlug}-${Date.now()}` : baseSlug
+
+				// Validate required fields
+				if (!formData.adminEmail) {
+					throw new Error('Admin email is required')
+				}
+				if (!formData.adminPassword || formData.adminPassword.length < 8) {
+					throw new Error('Admin password must be at least 8 characters')
+				}
+
+				const tenant = await tenantService.createTenant(token, {
+					tenantName: formData.tenantName,
+					slug: slug,
+					subscriptionTier: formData.subscriptionTier,
+					maxUsers: formData.maxUsers,
+					maxStorageGb: formData.maxStorageGb,
+					adminUser: {
+						email: formData.adminEmail || `admin@${slug}.com`,
+						password: formData.adminPassword,
+						firstName: formData.adminFirstName,
+						lastName: formData.adminLastName,
+						emailVerified: true,
+					},
+					metadata: {},
+				})
+				
+				// Success! Reset retry attempts and call success callback
+				setRetryAttempts(0)
+				onSuccess(tenant)
+
+			} catch (err: any) {
+				const isConflictError = err.status === 409 || err.message?.includes('already exists')
+				const canRetry = attempt < MAX_RETRY_ATTEMPTS && isConflictError
+
+				if (canRetry) {
+					// Set user-friendly retry message
+					setError(`Tenant name "${formData.tenantName}" is already in use. Trying with a unique identifier... (Attempt ${attempt + 1}/${MAX_RETRY_ATTEMPTS})`)
+					setRetryAttempts(attempt + 1)
+					
+					// Wait a moment before retrying
+					await new Promise(resolve => setTimeout(resolve, 1000))
+					return attemptCreateTenant(attempt + 1)
+				} else {
+					// Final error - provide helpful message
+					if (isConflictError) {
+						setError(`Tenant "${formData.tenantName}" already exists. Please choose a different name or slug, or try again in a moment.`)
+					} else {
+						setError(err.message || 'Failed to create tenant')
+					}
+					setRetryAttempts(0)
+				}
+			}
+		}
+
+		try {
+			await attemptCreateTenant()
 		} catch (err: any) {
-			setError(err.message || 'Failed to create tenant')
+			// This catch is for any errors in the retry logic itself
+			setError('An unexpected error occurred. Please try again.')
 		} finally {
 			setLoading(false)
 		}
 	}
 
 	return (
-		<div style={{ padding: '24px', background: '#f8f9fa', borderRadius: 8, marginBottom: 24 }}>
-			<h3 style={{ marginTop: 0, marginBottom: 20 }}>Create New Tenant</h3>
+		<>
+			<style>{`
+				@keyframes spin {
+					0% { transform: rotate(0deg); }
+					100% { transform: rotate(360deg); }
+				}
+			`}</style>
+			<div style={{ padding: '24px', background: '#f8f9fa', borderRadius: 8, marginBottom: 24 }}>
+				<h3 style={{ marginTop: 0, marginBottom: 20 }}>Create New Tenant</h3>
 			<form onSubmit={handleSubmit}>
 				<FormField label="Tenant Name" required error={error ?? undefined}>
 					<Input
@@ -109,17 +171,79 @@ export function CreateTenantForm({ token, onSuccess, onCancel }: CreateTenantFor
 					/>
 				</FormField>
 
-				<FormField label="Admin Email">
+				<FormField label="Admin Email" required>
 					<Input
 						type="email"
+						required
 						value={formData.adminEmail}
 						onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
 						placeholder="admin@example.com"
 					/>
+					<small style={{ color: '#6c757d', fontSize: 12, marginTop: 4, display: 'block' }}>
+						Email for the tenant administrator account
+					</small>
 				</FormField>
 
+				<FormField label="Admin Password" required>
+					<Input
+						type="password"
+						required
+						value={formData.adminPassword}
+						onChange={(e) => setFormData({ ...formData, adminPassword: e.target.value })}
+						placeholder="Secure password for admin"
+						minLength={8}
+					/>
+					<small style={{ color: '#6c757d', fontSize: 12, marginTop: 4, display: 'block' }}>
+						Minimum 8 characters
+					</small>
+				</FormField>
+
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+					<FormField label="Admin First Name" required>
+						<Input
+							type="text"
+							required
+							value={formData.adminFirstName}
+							onChange={(e) => setFormData({ ...formData, adminFirstName: e.target.value })}
+							placeholder="Admin"
+						/>
+					</FormField>
+
+					<FormField label="Admin Last Name" required>
+						<Input
+							type="text"
+							required
+							value={formData.adminLastName}
+							onChange={(e) => setFormData({ ...formData, adminLastName: e.target.value })}
+							placeholder="User"
+						/>
+					</FormField>
+				</div>
+
 				{error && (
-					<div style={{ padding: '12px', background: '#f8d7da', color: '#721c24', borderRadius: 4, marginBottom: 16 }}>
+					<div style={{ 
+						padding: '12px', 
+						background: retryAttempts > 0 ? '#fff3cd' : '#f8d7da', 
+						color: retryAttempts > 0 ? '#856404' : '#721c24', 
+						borderRadius: 4, 
+						marginBottom: 16,
+						border: retryAttempts > 0 ? '1px solid #ffeaa7' : '1px solid #f5c6cb'
+					}}>
+						{retryAttempts > 0 && (
+							<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+								<div 
+									style={{ 
+										width: 16, 
+										height: 16, 
+										border: '2px solid #856404', 
+										borderTop: '2px solid transparent', 
+										borderRadius: '50%', 
+										animation: 'spin 1s linear infinite' 
+									}} 
+								/>
+								<span>Retrying...</span>
+							</div>
+						)}
 						{error}
 					</div>
 				)}
@@ -134,6 +258,7 @@ export function CreateTenantForm({ token, onSuccess, onCancel }: CreateTenantFor
 				</div>
 			</form>
 		</div>
+		</>
 	)
 }
 

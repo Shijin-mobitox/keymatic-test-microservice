@@ -121,6 +121,9 @@ keycloak:
     grant-type: ${KEYCLOAK_ADMIN_GRANT_TYPE:password}
     # Connection pool settings
     connection-pool-size: ${KEYCLOAK_ADMIN_POOL_SIZE:10}
+    # Development feature: cleanup existing organizations before creating new ones
+    # WARNING: Only use this in development/testing environments
+    organization-cleanup-enabled: ${KEYCLOAK_ORG_CLEANUP_ENABLED:true}
 
 # SpringDoc OpenAPI configuration
 springdoc:

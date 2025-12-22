@@ -74,7 +74,7 @@ export const tenantService = {
 	},
 
 	/**
-	 * Create a new tenant
+	 * Create a new tenant with Organizations support
 	 */
 	createTenant: async (token: string, data: {
 		tenantName: string
@@ -82,7 +82,14 @@ export const tenantService = {
 		subscriptionTier: string
 		maxUsers: number
 		maxStorageGb: number
-		adminEmail?: string
+		adminUser: {
+			email: string
+			password: string
+			firstName: string
+			lastName: string
+			emailVerified: boolean
+		}
+		metadata: any
 	}): Promise<TenantInfo> => {
 		return api.post<TenantInfo>('/api/tenants', data, token)
 	},
