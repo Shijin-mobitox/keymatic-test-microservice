@@ -8,11 +8,15 @@ export type KeycloakInstance = any
 export function createKeycloakInstance(): KeycloakInstance {
 	const baseUrl =
 		(import.meta as any).env?.VITE_KEYCLOAK_BASE_URL?.toString() || 'http://localhost:8085/'
+	const realm = 
+		(import.meta as any).env?.VITE_KEYCLOAK_REALM?.toString() || 'kymatic'
+	const clientId = 
+		(import.meta as any).env?.VITE_KEYCLOAK_CLIENT_ID?.toString() || 'kymatic-react-client'
 	
 	const config = {
 		url: baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl,
-		realm: 'kymatic',
-		clientId: 'react-client'
+		realm: realm,
+		clientId: clientId
 	}
 	
 	const KC = Keycloak as any

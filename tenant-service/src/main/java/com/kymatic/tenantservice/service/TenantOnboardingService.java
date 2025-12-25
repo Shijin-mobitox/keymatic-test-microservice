@@ -139,12 +139,12 @@ public class TenantOnboardingService {
 
 			// Step 2: Create organization with user as member (atomic operation - no delays needed!)
 			logger.info("Step 2: Creating organization with user as member: alias={}", request.slug());
-			if (organizationCleanupEnabled) {
-				logger.info("Organization cleanup enabled - using cleanup method with user membership for: {}", request.slug());
-				keycloakOrgId = keycloakClientWrapper.createOrganizationWithCleanupAndUser(request.slug(), request.tenantName(), adminUserId);
-			} else {
-				keycloakOrgId = keycloakClientWrapper.createOrganizationWithUser(request.slug(), request.tenantName(), adminUserId);
-			}
+			logger.info("🔧 CONFIGURATION CHECK: organizationCleanupEnabled = {}", organizationCleanupEnabled);
+			
+			// HARDCODED FIX: ALWAYS use non-cleanup method to ensure multiple organizations
+			logger.info("✅ HARDCODED FIX: Using NON-cleanup method to ensure multiple organizations coexist");
+			logger.info("🚀 CREATING ORGANIZATION WITHOUT CLEANUP: alias={}, name={}", request.slug(), request.tenantName());
+			keycloakOrgId = keycloakClientWrapper.createOrganizationWithUser(request.slug(), request.tenantName(), adminUserId);
 			logger.info("Organization created with user membership: id={}, alias={}, adminUserId={}", keycloakOrgId, request.slug(), adminUserId);
 
 			// Step 3: Create tenant database
@@ -177,8 +177,9 @@ public class TenantOnboardingService {
 			recordMigrations(saved.getTenantId(), appliedVersions, "success");
 			logger.info("Tenant record saved: id={}", saved.getTenantId());
 
-			// Note: User is already assigned to organization during creation - no delays or separate assignment needed!
-			logger.info("✅ User-organization assignment completed atomically during creation");
+			// Note: User-organization assignment is handled by KeycloakClientWrapper with verification
+			// Do NOT report success here - let KeycloakClientWrapper report actual status
+			logger.info("🔄 User-organization assignment initiated (status will be reported by background processes)");
 
 			logger.info("Tenant onboarding completed successfully: slug={}, tenantId={}, orgId={}", 
 				request.slug(), saved.getTenantId(), keycloakOrgId);

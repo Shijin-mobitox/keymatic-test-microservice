@@ -286,7 +286,7 @@ public class KeycloakClientWrapper {
 				.uri(URI.create(membersUrl))
 				.header("Authorization", "Bearer " + accessToken)
 				.header("Content-Type", "application/json")
-				.POST(HttpRequest.BodyPublishers.ofString("[\"" + userId + "\"]"))
+				.POST(HttpRequest.BodyPublishers.ofString( userId))
 				.timeout(Duration.ofSeconds(30))
 				.build();
 

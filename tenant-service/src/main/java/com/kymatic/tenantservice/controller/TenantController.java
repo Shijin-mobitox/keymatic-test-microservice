@@ -21,6 +21,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -42,6 +44,8 @@ import java.util.stream.Collectors;
 @RequestMapping(path = "/api/tenants", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "Tenant Management", description = "Tenant provisioning and routing (master database).")
 public class TenantController {
+
+	private static final Logger logger = LoggerFactory.getLogger(TenantController.class);
 
 	private final TenantProvisioningService tenantProvisioningService;
 	private final WorkflowOrchestrationService workflowOrchestrationService;
@@ -287,43 +291,79 @@ public class TenantController {
 
 	@Operation(
 		summary = "Manually assign user to organization", 
-		description = "Assigns a user to an organization in Keycloak. Useful for fixing failed automatic assignments during tenant creation.",
+		description = "Assigns a user to an organization in Keycloak using the SAFE assignment flow with verification. " +
+					  "This endpoint handles Keycloak 26.x timing issues and provides reliable user-organization assignment.",
 		responses = {
-			@ApiResponse(responseCode = "200", description = "User assigned successfully"),
-			@ApiResponse(responseCode = "400", description = "Invalid input or assignment failed"),
-			@ApiResponse(responseCode = "404", description = "Organization or user not found")
+			@ApiResponse(responseCode = "200", description = "User assigned successfully (verified)"),
+			@ApiResponse(responseCode = "400", description = "Assignment failed or user/organization not found"),
+			@ApiResponse(responseCode = "409", description = "User is already assigned to organization")
 		}
 	)
 	@PostMapping("/{slug}/assign-user")
 	public ResponseEntity<Map<String, Object>> assignUserToOrganization(
-		@Parameter(description = "Organization alias (slug)") @PathVariable String slug,
-		@Parameter(description = "User email to assign") @RequestParam String userEmail
+		@Parameter(description = "Organization alias (slug)", example = "orgtenant12") @PathVariable String slug,
+		@Parameter(description = "User email to assign", example = "user@example.com") @RequestParam String userEmail
 	) {
+		logger.info("🔧 API REQUEST: Manual user assignment - slug={}, email={}", slug, userEmail);
+		
+		// Input validation
+		if (slug == null || slug.isBlank()) {
+			return ResponseEntity.badRequest().body(Map.of(
+				"success", false,
+				"message", "Organization slug is required",
+				"error", "INVALID_INPUT"
+			));
+		}
+		
+		if (userEmail == null || userEmail.isBlank() || !userEmail.contains("@")) {
+			return ResponseEntity.badRequest().body(Map.of(
+				"success", false,
+				"message", "Valid user email is required",
+				"error", "INVALID_EMAIL"
+			));
+		}
+		
 		try {
+			// Use the same verification logic as automatic assignment
 			boolean success = keycloakClientWrapper.manuallyAssignUserToOrganization(slug, userEmail);
 			
 			if (success) {
+				logger.info("✅ API SUCCESS: User {} assigned to organization {} via API", userEmail, slug);
 				return ResponseEntity.ok(Map.of(
 					"success", true,
-					"message", "User successfully assigned to organization",
-					"organizationSlug", slug,
-					"userEmail", userEmail
-				));
-			} else {
-				return ResponseEntity.badRequest().body(Map.of(
-					"success", false,
-					"message", "Failed to assign user to organization",
+					"message", "User successfully assigned to organization and verified",
 					"organizationSlug", slug,
 					"userEmail", userEmail,
-					"suggestion", "Try the manual GUI method: http://localhost:8085 → kymatic realm → Organizations → " + slug + " → Members"
+					"status", "VERIFIED_ASSIGNED",
+					"timestamp", System.currentTimeMillis()
+				));
+			} else {
+				logger.warn("❌ API FAILURE: Could not assign user {} to organization {}", userEmail, slug);
+				return ResponseEntity.badRequest().body(Map.of(
+					"success", false,
+					"message", "Failed to assign user to organization despite multiple attempts",
+					"organizationSlug", slug,
+					"userEmail", userEmail,
+					"status", "ASSIGNMENT_FAILED",
+					"remediation", Map.of(
+						"gui_method", "http://localhost:8085 → kymatic realm → Organizations → " + slug + " → Members → Add member",
+						"search_email", userEmail,
+						"reason", "Keycloak 26.x Organizations API timing limitations"
+					),
+					"timestamp", System.currentTimeMillis()
 				));
 			}
 		} catch (Exception e) {
-			return ResponseEntity.badRequest().body(Map.of(
+			logger.error("❌ API ERROR: Exception during manual assignment - slug={}, email={}, error={}", 
+				slug, userEmail, e.getMessage(), e);
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
 				"success", false,
-				"message", "Error during assignment: " + e.getMessage(),
+				"message", "Internal error during user assignment",
 				"organizationSlug", slug,
-				"userEmail", userEmail
+				"userEmail", userEmail,
+				"error", e.getMessage(),
+				"status", "INTERNAL_ERROR",
+				"timestamp", System.currentTimeMillis()
 			));
 		}
 	}

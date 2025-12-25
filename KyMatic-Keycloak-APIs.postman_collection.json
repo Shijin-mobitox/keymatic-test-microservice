@@ -1,0 +1,1496 @@
+{
+	"info": {
+		"_postman_id": "f2e5a9d3-8b4c-4d6e-9f1a-2e3c4f5g6h7i",
+		"name": "KyMatic - Keycloak APIs",
+		"description": "Complete collection of Keycloak APIs used in the KyMatic multi-tenant project.\n\nThis collection includes:\n- Authentication & Token management\n- User management\n- Organization management (Keycloak 26+)\n- Group management (alternative to Organizations)\n- Application service endpoints\n- Admin API endpoints\n\n**Setup Instructions:**\n1. Import this collection into Postman\n2. Set up the environment variables (see Variables tab)\n3. Run 'Get Admin Token' first to authenticate admin operations\n4. Use folder structure to organize different API categories",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "12345678"
+	},
+	"item": [
+		{
+			"name": "🔐 Authentication & Tokens",
+			"item": [
+				{
+					"name": "Get Admin Token (Master Realm)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (responseCode.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.environment.set('admin_token', jsonData.access_token);",
+									"    pm.environment.set('admin_refresh_token', jsonData.refresh_token);",
+									"    console.log('Admin token saved to environment');",
+									"} else {",
+									"    console.log('Failed to get admin token:', responseBody);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "grant_type",
+									"value": "password",
+									"type": "text"
+								},
+								{
+									"key": "client_id",
+									"value": "admin-cli",
+									"type": "text"
+								},
+								{
+									"key": "username",
+									"value": "{{admin_username}}",
+									"type": "text"
+								},
+								{
+									"key": "password",
+									"value": "{{admin_password}}",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{keycloak_base_url}}/realms/master/protocol/openid-connect/token",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"realms",
+								"master",
+								"protocol",
+								"openid-connect",
+								"token"
+							]
+						},
+						"description": "Gets admin access token for Keycloak admin operations. This token is required for most admin API calls."
+					}
+				},
+				{
+					"name": "Get User Token (Kymatic Realm)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (responseCode.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.environment.set('user_token', jsonData.access_token);",
+									"    pm.environment.set('user_refresh_token', jsonData.refresh_token);",
+									"    console.log('User token saved to environment');",
+									"    ",
+									"    // Decode JWT to see claims",
+									"    const jwt = jsonData.access_token;",
+									"    const payload = JSON.parse(atob(jwt.split('.')[1]));",
+									"    console.log('JWT Claims:', JSON.stringify(payload, null, 2));",
+									"} else {",
+									"    console.log('Failed to get user token:', responseBody);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "grant_type",
+									"value": "password",
+									"type": "text"
+								},
+								{
+									"key": "client_id",
+									"value": "{{react_client_id}}",
+									"type": "text"
+								},
+								{
+									"key": "username",
+									"value": "{{test_username}}",
+									"type": "text"
+								},
+								{
+									"key": "password",
+									"value": "{{test_password}}",
+									"type": "text"
+								},
+								{
+									"key": "scope",
+									"value": "openid profile email",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{keycloak_base_url}}/realms/{{realm_name}}/protocol/openid-connect/token",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"realms",
+								"{{realm_name}}",
+								"protocol",
+								"openid-connect",
+								"token"
+							]
+						},
+						"description": "Gets user access token from kymatic realm. This simulates user authentication and shows tenant_id claim in JWT."
+					}
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (responseCode.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.environment.set('user_token', jsonData.access_token);",
+									"    if (jsonData.refresh_token) {",
+									"        pm.environment.set('user_refresh_token', jsonData.refresh_token);",
+									"    }",
+									"    console.log('Token refreshed successfully');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "grant_type",
+									"value": "refresh_token",
+									"type": "text"
+								},
+								{
+									"key": "client_id",
+									"value": "{{react_client_id}}",
+									"type": "text"
+								},
+								{
+									"key": "refresh_token",
+									"value": "{{user_refresh_token}}",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{keycloak_base_url}}/realms/{{realm_name}}/protocol/openid-connect/token",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"realms",
+								"{{realm_name}}",
+								"protocol",
+								"openid-connect",
+								"token"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get UserInfo",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/realms/{{realm_name}}/protocol/openid-connect/userinfo",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"realms",
+								"{{realm_name}}",
+								"protocol",
+								"openid-connect",
+								"userinfo"
+							]
+						},
+						"description": "Gets user information from the userinfo endpoint using access token."
+					}
+				},
+				{
+					"name": "Get JWKS (Public Keys)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{keycloak_base_url}}/realms/{{realm_name}}/protocol/openid-connect/certs",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"realms",
+								"{{realm_name}}",
+								"protocol",
+								"openid-connect",
+								"certs"
+							]
+						},
+						"description": "Gets JSON Web Key Set (JWKS) for token validation. Used by backend services to verify JWT signatures."
+					}
+				}
+			],
+			"description": "Authentication and token management endpoints used by the application"
+		},
+		{
+			"name": "👥 User Management",
+			"item": [
+				{
+					"name": "List Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/users?max=20",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"users"
+							],
+							"query": [
+								{
+									"key": "max",
+									"value": "20"
+								}
+							]
+						},
+						"description": "Lists users in the kymatic realm. Used for user management and debugging."
+					}
+				},
+				{
+					"name": "Search Users by Email",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/users?email={{test_email}}&exact=true",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"users"
+							],
+							"query": [
+								{
+									"key": "email",
+									"value": "{{test_email}}"
+								},
+								{
+									"key": "exact",
+									"value": "true"
+								}
+							]
+						},
+						"description": "Searches for users by email. Used by KeycloakClientWrapper to check if user exists."
+					}
+				},
+				{
+					"name": "Get User by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/users/{{user_id}}",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"users",
+								"{{user_id}}"
+							]
+						},
+						"description": "Gets detailed information about a specific user."
+					}
+				},
+				{
+					"name": "Create User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (responseCode.code === 201) {",
+									"    const location = pm.response.headers.get('Location');",
+									"    if (location) {",
+									"        const userId = location.split('/').pop();",
+									"        pm.environment.set('created_user_id', userId);",
+									"        console.log('User created with ID:', userId);",
+									"    }",
+									"} else {",
+									"    console.log('User creation failed:', responseBody);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"newuser@example.com\",\n  \"email\": \"newuser@example.com\",\n  \"firstName\": \"New\",\n  \"lastName\": \"User\",\n  \"enabled\": true,\n  \"emailVerified\": true\n}"
+						},
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/users",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"users"
+							]
+						},
+						"description": "Creates a new user in Keycloak. Used by tenant creation process."
+					}
+				},
+				{
+					"name": "Set User Password",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"password\",\n  \"value\": \"password123\",\n  \"temporary\": false\n}"
+						},
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/users/{{created_user_id}}/reset-password",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"users",
+								"{{created_user_id}}",
+								"reset-password"
+							]
+						},
+						"description": "Sets password for a user. Called after user creation."
+					}
+				},
+				{
+					"name": "Delete User",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/users/{{created_user_id}}",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"users",
+								"{{created_user_id}}"
+							]
+						},
+						"description": "Deletes a user. Used for cleanup and rollback operations."
+					}
+				}
+			],
+			"description": "User management operations used by the KeycloakClientWrapper"
+		},
+		{
+			"name": "🏢 Organization Management (Keycloak 26+)",
+			"item": [
+				{
+					"name": "List Organizations",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/organizations",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"organizations"
+							]
+						},
+						"description": "Lists all organizations in the realm. Used to check existing organizations."
+					}
+				},
+				{
+					"name": "Search Organization by Alias",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/organizations?alias={{tenant_alias}}",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"organizations"
+							],
+							"query": [
+								{
+									"key": "alias",
+									"value": "{{tenant_alias}}"
+								}
+							]
+						},
+						"description": "Searches for an organization by alias. Used to check if tenant already exists."
+					}
+				},
+				{
+					"name": "Create Organization",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (responseCode.code === 201) {",
+									"    const location = pm.response.headers.get('Location');",
+									"    if (location) {",
+									"        const orgId = location.split('/').pop();",
+									"        pm.environment.set('organization_id', orgId);",
+									"        console.log('Organization created with ID:', orgId);",
+									"    }",
+									"} else {",
+									"    console.log('Organization creation failed:', responseBody);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"alias\": \"test-tenant-123\",\n  \"name\": \"Test Tenant Organization\",\n  \"enabled\": true,\n  \"domains\": [\n    {\n      \"name\": \"test-tenant-123.local\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/organizations",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"organizations"
+							]
+						},
+						"description": "Creates a new organization (tenant) in Keycloak. Core function of tenant creation process."
+					}
+				},
+				{
+					"name": "Get Organization Members",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/organizations/{{organization_id}}/members",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"organizations",
+								"{{organization_id}}",
+								"members"
+							]
+						},
+						"description": "Lists members of an organization. Used for verification and debugging user assignments."
+					}
+				},
+				{
+					"name": "Add User to Organization",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "\"{{created_user_id}}\""
+						},
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/organizations/{{organization_id}}/members",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"organizations",
+								"{{organization_id}}",
+								"members"
+							]
+						},
+						"description": "Adds a user to an organization. This is the most challenging API call in the project due to timing issues."
+					}
+				},
+				{
+					"name": "Get Organization Roles",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/organizations/{{organization_id}}/roles",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"organizations",
+								"{{organization_id}}",
+								"roles"
+							]
+						},
+						"description": "Gets available roles within an organization."
+					}
+				},
+				{
+					"name": "Assign Role to User in Organization",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "[\n  {\n    \"id\": \"role-id-here\",\n    \"name\": \"admin\"\n  }\n]"
+						},
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/organizations/{{organization_id}}/members/{{created_user_id}}/roles",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"organizations",
+								"{{organization_id}}",
+								"members",
+								"{{created_user_id}}",
+								"roles"
+							]
+						},
+						"description": "Assigns a role to a user within an organization."
+					}
+				},
+				{
+					"name": "Delete Organization",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/organizations/{{organization_id}}",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"organizations",
+								"{{organization_id}}"
+							]
+						},
+						"description": "Deletes an organization. Used for cleanup and rollback operations."
+					}
+				}
+			],
+			"description": "Organization management APIs - the core of the multi-tenant architecture in Keycloak 26+"
+		},
+		{
+			"name": "👥 Group Management (Alternative)",
+			"item": [
+				{
+					"name": "List Groups",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/groups",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"groups"
+							]
+						},
+						"description": "Lists groups in the realm. Groups are used as an alternative to Organizations."
+					}
+				},
+				{
+					"name": "Search Groups",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/groups?search={{group_name}}",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"groups"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": "{{group_name}}"
+								}
+							]
+						},
+						"description": "Searches for groups by name."
+					}
+				},
+				{
+					"name": "Create Group",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (responseCode.code === 201) {",
+									"    const location = pm.response.headers.get('Location');",
+									"    if (location) {",
+									"        const groupId = location.split('/').pop();",
+									"        pm.environment.set('group_id', groupId);",
+									"        console.log('Group created with ID:', groupId);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"tenant-group-123\"\n}"
+						},
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/groups",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"groups"
+							]
+						},
+						"description": "Creates a new group. Alternative to Organizations for tenant isolation."
+					}
+				},
+				{
+					"name": "Assign User to Group",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/users/{{created_user_id}}/groups/{{group_id}}",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"users",
+								"{{created_user_id}}",
+								"groups",
+								"{{group_id}}"
+							]
+						},
+						"description": "Assigns a user to a group. More stable than Organizations API."
+					}
+				},
+				{
+					"name": "Delete Group",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/groups/{{group_id}}",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"groups",
+								"{{group_id}}"
+							]
+						},
+						"description": "Deletes a group."
+					}
+				}
+			],
+			"description": "Group management as an alternative to Organizations for older Keycloak versions"
+		},
+		{
+			"name": "🎛️ Client & Realm Management",
+			"item": [
+				{
+					"name": "Get Realm Info",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}"
+							]
+						},
+						"description": "Gets detailed information about the realm configuration."
+					}
+				},
+				{
+					"name": "List Clients",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/clients",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"clients"
+							]
+						},
+						"description": "Lists all clients in the realm."
+					}
+				},
+				{
+					"name": "Get React Client",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/clients?clientId={{react_client_id}}",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"clients"
+							],
+							"query": [
+								{
+									"key": "clientId",
+									"value": "{{react_client_id}}"
+								}
+							]
+						},
+						"description": "Gets configuration of the React client used by frontend."
+					}
+				}
+			],
+			"description": "Realm and client configuration endpoints"
+		},
+		{
+			"name": "🚀 Application Services",
+			"item": [
+				{
+					"name": "Tenant Service - Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8083/actuator/health",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8083",
+							"path": [
+								"actuator",
+								"health"
+							]
+						},
+						"description": "Checks if tenant service is running and healthy."
+					}
+				},
+				{
+					"name": "Tenant Service - Create Tenant",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"tenantName\": \"Test Company Ltd\",\n  \"slug\": \"test-company-{{$timestamp}}\",\n  \"adminEmail\": \"admin@testcompany.com\",\n  \"adminPassword\": \"securePassword123\",\n  \"adminFirstName\": \"Admin\",\n  \"adminLastName\": \"User\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8083/api/tenants",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8083",
+							"path": [
+								"api",
+								"tenants"
+							]
+						},
+						"description": "Creates a new tenant with organization and admin user. This is the main business endpoint."
+					}
+				},
+				{
+					"name": "Tenant Service - Get Tenant Info",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://localhost:8083/api/tenants/{{tenant_slug}}",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8083",
+							"path": [
+								"api",
+								"tenants",
+								"{{tenant_slug}}"
+							]
+						},
+						"description": "Gets information about a specific tenant."
+					}
+				},
+				{
+					"name": "Tenant Service - Assign User to Tenant",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://localhost:8083/api/tenants/{{tenant_slug}}/assign-user?userEmail={{user_email}}",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8083",
+							"path": [
+								"api",
+								"tenants",
+								"{{tenant_slug}}",
+								"assign-user"
+							],
+							"query": [
+								{
+									"key": "userEmail",
+									"value": "{{user_email}}"
+								}
+							]
+						},
+						"description": "Manually assigns a user to a tenant organization."
+					}
+				},
+				{
+					"name": "API Service - Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://localhost:8084/api/me",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8084",
+							"path": [
+								"api",
+								"me"
+							]
+						},
+						"description": "Gets current user information with tenant context. Shows JWT token processing."
+					}
+				},
+				{
+					"name": "Gateway Service - Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/actuator/health",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"actuator",
+								"health"
+							]
+						},
+						"description": "Checks gateway service health."
+					}
+				},
+				{
+					"name": "Auth Service - Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8082/actuator/health",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8082",
+							"path": [
+								"actuator",
+								"health"
+							]
+						},
+						"description": "Checks auth service health."
+					}
+				}
+			],
+			"description": "Your application's service endpoints that integrate with Keycloak"
+		},
+		{
+			"name": "🧪 Testing & Debugging",
+			"item": [
+				{
+					"name": "Test - Complete Tenant Creation Flow",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// This is a comprehensive test that validates the entire flow",
+									"",
+									"pm.test(\"Tenant creation successful\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"if (pm.response.code === 201) {",
+									"    const responseJson = pm.response.json();",
+									"    ",
+									"    pm.test(\"Response contains tenant info\", function () {",
+									"        pm.expect(responseJson).to.have.property('id');",
+									"        pm.expect(responseJson).to.have.property('slug');",
+									"        pm.expect(responseJson).to.have.property('keycloakOrganizationId');",
+									"    });",
+									"    ",
+									"    // Save tenant info for subsequent tests",
+									"    pm.environment.set('created_tenant_slug', responseJson.slug);",
+									"    pm.environment.set('created_tenant_id', responseJson.id);",
+									"    ",
+									"    console.log('✅ Tenant created successfully:', responseJson.slug);",
+									"    console.log('📝 Keycloak Org ID:', responseJson.keycloakOrganizationId);",
+									"} else {",
+									"    console.log('❌ Tenant creation failed:', pm.response.text());",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"tenantName\": \"E2E Test Company\",\n  \"slug\": \"e2e-test-{{$timestamp}}\",\n  \"adminEmail\": \"admin-{{$timestamp}}@test.com\",\n  \"adminPassword\": \"TestPassword123!\",\n  \"adminFirstName\": \"Test\",\n  \"adminLastName\": \"Admin\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8083/api/tenants",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8083",
+							"path": [
+								"api",
+								"tenants"
+							]
+						},
+						"description": "End-to-end test of the complete tenant creation flow including Keycloak organization and user creation."
+					}
+				},
+				{
+					"name": "Debug - Check Organization Assignment",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{keycloak_base_url}}/admin/realms/{{realm_name}}/organizations/{{organization_id}}/members",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"admin",
+								"realms",
+								"{{realm_name}}",
+								"organizations",
+								"{{organization_id}}",
+								"members"
+							]
+						},
+						"description": "Debug endpoint to verify user-organization assignments. Useful when troubleshooting assignment issues."
+					}
+				},
+				{
+					"name": "Debug - Decode JWT Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Decode and display JWT token contents",
+									"const token = pm.environment.get('user_token');",
+									"if (token) {",
+									"    try {",
+									"        const payload = JSON.parse(atob(token.split('.')[1]));",
+									"        console.log('=== JWT TOKEN CONTENTS ===');",
+									"        console.log(JSON.stringify(payload, null, 2));",
+									"        ",
+									"        // Check for tenant_id claim",
+									"        if (payload.tenant_id) {",
+									"            console.log('✅ tenant_id claim found:', payload.tenant_id);",
+									"        } else {",
+									"            console.log('❌ tenant_id claim NOT found in token');",
+									"        }",
+									"        ",
+									"        // Check token expiration",
+									"        const exp = new Date(payload.exp * 1000);",
+									"        console.log('🕐 Token expires at:', exp.toISOString());",
+									"        ",
+									"    } catch (e) {",
+									"        console.log('❌ Failed to decode token:', e.message);",
+									"    }",
+									"} else {",
+									"    console.log('❌ No user token found in environment');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{keycloak_base_url}}/realms/{{realm_name}}",
+							"host": [
+								"{{keycloak_base_url}}"
+							],
+							"path": [
+								"realms",
+								"{{realm_name}}"
+							]
+						},
+						"description": "Utility request to decode and examine JWT token contents. Check the Console tab for output."
+					}
+				}
+			],
+			"description": "Testing and debugging utilities for troubleshooting Keycloak integration"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global pre-request script for logging",
+					"console.log('🚀 Making request to:', pm.request.url.toString());"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global test script for response logging",
+					"console.log('📥 Response status:', pm.response.status, pm.response.code);",
+					"if (pm.response.code >= 400) {",
+					"    console.log('❌ Error response:', pm.response.text());",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "keycloak_base_url",
+			"value": "https://f12e2153-e40c-4615-b9c9-3a4e6f5fd782.us.skycloak.io",
+			"type": "string"
+		},
+		{
+			"key": "realm_name",
+			"value": "kymatic",
+			"type": "string"
+		},
+		{
+			"key": "admin_username",
+			"value": "admin-gG7X0T1x",
+			"type": "string"
+		},
+		{
+			"key": "admin_password",
+			"value": "blEzm8bnafcGnv50",
+			"type": "string"
+		},
+		{
+			"key": "react_client_id",
+			"value": "kymatic-react-client",
+			"type": "string"
+		},
+		{
+			"key": "test_username",
+			"value": "testuser",
+			"type": "string"
+		},
+		{
+			"key": "test_password",
+			"value": "testpassword",
+			"type": "string"
+		},
+		{
+			"key": "test_email",
+			"value": "test@kymatic.com",
+			"type": "string"
+		},
+		{
+			"key": "tenant_alias",
+			"value": "test-tenant-123",
+			"type": "string"
+		},
+		{
+			"key": "group_name",
+			"value": "test-group",
+			"type": "string"
+		},
+		{
+			"key": "admin_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user_refresh_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "organization_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "created_user_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "group_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "tenant_slug",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user_email",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

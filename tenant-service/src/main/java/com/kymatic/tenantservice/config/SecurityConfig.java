@@ -46,6 +46,12 @@ public class SecurityConfig {
 
     @Value("${app.jwt.issuer:http://localhost:8083}")
     private String localJwtIssuer;
+    
+    @Value("${keycloak.admin.server-url:http://localhost:8085}")
+    private String keycloakServerUrl;
+    
+    @Value("${keycloak.admin.realm:kymatic}")
+    private String keycloakRealm;
 
     public SecurityConfig(JwtTenantResolver jwtTenantResolver, JwtTokenUtil jwtTokenUtil) {
         this.jwtTenantResolver = jwtTenantResolver;
@@ -121,42 +127,35 @@ public class SecurityConfig {
     }
 
     /**
-     * Creates Keycloak JWT decoder that accepts tokens from both internal and external Keycloak URLs.
-     * 
-     * The frontend uses http://localhost:8085 to authenticate, so tokens have issuer:
-     *   http://localhost:8085/realms/kymatic
-     * 
-     * But the service running in Docker can only reach Keycloak via:
-     *   http://keycloak:8080/realms/kymatic
+     * Creates Keycloak JWT decoder that accepts tokens from configurable Keycloak URLs.
      * 
      * This decoder:
-     * - Uses the internal Keycloak URL to fetch JWK keys (for validation)
-     * - Accepts tokens with issuer from either URL
+     * - Uses configurable Keycloak URL to fetch JWK keys (for validation)
+     * - Accepts tokens from the configured issuer URL
+     * - Supports both local and cloud Keycloak instances
      */
     private JwtDecoder createKeycloakDecoder() {
-        // Use internal Keycloak URL to fetch JWK keys (service can reach this)
-        // NimbusJwtDecoder automatically caches JWK keys to improve performance
-        String jwkSetUri = "http://keycloak:8080/realms/kymatic/protocol/openid-connect/certs";
+        // Use configured Keycloak URL to fetch JWK keys
+        String jwkSetUri = String.format("%s/realms/%s/protocol/openid-connect/certs", keycloakServerUrl, keycloakRealm);
         NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
 
-        // Create a custom validator that accepts tokens from either issuer URI
+        // Create a custom validator that accepts tokens from the configured issuer
         OAuth2TokenValidator<Jwt> issuerValidator = new OAuth2TokenValidator<Jwt>() {
-            private static final String INTERNAL_ISSUER = "http://keycloak:8080/realms/kymatic";
-            private static final String EXTERNAL_ISSUER = "http://localhost:8085/realms/kymatic";
+            private final String expectedIssuer = String.format("%s/realms/%s", keycloakServerUrl, keycloakRealm);
 
             @Override
             public OAuth2TokenValidatorResult validate(Jwt token) {
                 String issuer = token.getIssuer().toString();
                 
-                // Accept tokens from either issuer
-                if (INTERNAL_ISSUER.equals(issuer) || EXTERNAL_ISSUER.equals(issuer)) {
+                // Accept tokens from the configured issuer
+                if (expectedIssuer.equals(issuer)) {
                     return OAuth2TokenValidatorResult.success();
                 }
                 
-                // If issuer doesn't match either, return error
+                // If issuer doesn't match, return error
                 OAuth2Error error = new OAuth2Error(
                     OAuth2ErrorCodes.INVALID_TOKEN,
-                    "The token's issuer is not valid. Expected: " + INTERNAL_ISSUER + " or " + EXTERNAL_ISSUER + ", but was: " + issuer,
+                    "The token's issuer is not valid. Expected: " + expectedIssuer + ", but was: " + issuer,
                     null
                 );
                 return OAuth2TokenValidatorResult.failure(error);

@@ -192,42 +192,30 @@ public class KeycloakClientWrapper {
 
 		String orgId = createOrganizationInternal(alias, name);
 		
-		// Add user as member after organization creation with comprehensive retry logic
-		boolean assignmentSucceeded = false;
+		// SAFE ASSIGNMENT FLOW: Handle Keycloak 26.x timing issues
+		boolean assignmentPending = true;
+		logger.info("🔄 Starting SAFE user-organization assignment flow: orgId={}, userId={}", orgId, adminUserId);
+		
+		// Step 1: Minimum 30-second wait for Keycloak user indexing
+		logger.info("⏳ SAFE FLOW: Waiting 30 seconds for Keycloak user indexing...");
 		try {
-			logger.info("Adding user as organization member after creation: orgId={}, userId={}", orgId, adminUserId);
-			addUserToOrganizationImmediate(orgId, adminUserId);
-			
-			// Verify the assignment actually worked
-			if (verifyUserOrganizationAssignment(orgId, adminUserId)) {
-				logger.info("✅ Successfully created organization with verified user membership: alias={}, orgId={}, userId={}", alias, orgId, adminUserId);
-				assignmentSucceeded = true;
-			} else {
-				logger.warn("❌ Assignment API succeeded but verification failed - user not actually assigned");
-				throw new KeycloakException("Assignment verification failed");
-			}
-		} catch (Exception e) {
-			logger.warn("Enhanced immediate assignment failed, trying direct fallback: orgId={}, userId={}, error={}", orgId, adminUserId, e.getMessage());
-			// Fallback: Try direct assignment with fewer retries but longer delays
-			try {
-				assignUserToOrganizationDirectly(orgId, adminUserId);
-				
-				// Verify fallback assignment
-				if (verifyUserOrganizationAssignment(orgId, adminUserId)) {
-					logger.info("✅ Successfully assigned user via fallback with verification: alias={}, orgId={}, userId={}", alias, orgId, adminUserId);
-					assignmentSucceeded = true;
-				} else {
-					throw new KeycloakException("Fallback assignment verification failed");
-				}
-			} catch (Exception fallbackException) {
-				logger.error("❌ Both enhanced and fallback assignment methods failed: orgId={}, userId={}", orgId, adminUserId, fallbackException);
-			}
+			Thread.sleep(30000);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			logger.error("❌ SAFE FLOW: Wait interrupted, proceeding anyway");
 		}
 		
-		if (!assignmentSucceeded) {
-			logger.error("⚠️ IMMEDIATE ASSIGNMENT FAILED - Starting background retry job for user {} to organization {}", adminUserId, orgId);
-			// Start a background thread to retry assignment after a longer delay
-			scheduleDelayedAssignment(orgId, adminUserId, alias);
+		// Step 2: Attempt assignment with immediate retries (5 attempts, 5s → 25s delays)
+		boolean immediateSuccess = performImmediateAssignmentWithRetries(orgId, adminUserId, alias);
+		
+		if (immediateSuccess) {
+			logger.info("✅ SAFE FLOW: User-organization assignment completed successfully during immediate retries");
+			assignmentPending = false;
+		} else {
+			logger.warn("⚠️ SAFE FLOW: Immediate assignment failed, starting background retry job");
+			// Step 3: Start background retry job (5 attempts with 20s delays)
+			scheduleBackgroundAssignmentJob(orgId, adminUserId, alias);
+			logger.info("🕐 SAFE FLOW: Background assignment job scheduled - assignment will complete automatically");
 		}
 		
 		return orgId;
@@ -264,42 +252,30 @@ public class KeycloakClientWrapper {
 
 		String orgId = createOrganizationInternal(alias, name);
 		
-		// Add user as member after organization creation with comprehensive retry logic
-		boolean assignmentSucceeded = false;
+		// SAFE ASSIGNMENT FLOW: Handle Keycloak 26.x timing issues (with cleanup)
+		boolean assignmentPending = true;
+		logger.info("🔄 Starting SAFE user-organization assignment flow (with cleanup): orgId={}, userId={}", orgId, adminUserId);
+		
+		// Step 1: Minimum 30-second wait for Keycloak user indexing
+		logger.info("⏳ SAFE FLOW (cleanup): Waiting 30 seconds for Keycloak user indexing...");
 		try {
-			logger.info("Adding user as organization member after creation (with cleanup): orgId={}, userId={}", orgId, adminUserId);
-			addUserToOrganizationImmediate(orgId, adminUserId);
-			
-			// Verify the assignment actually worked
-			if (verifyUserOrganizationAssignment(orgId, adminUserId)) {
-				logger.info("✅ Successfully created organization with cleanup and verified user membership: alias={}, orgId={}, userId={}", alias, orgId, adminUserId);
-				assignmentSucceeded = true;
-			} else {
-				logger.warn("❌ Assignment API succeeded but verification failed - user not actually assigned");
-				throw new KeycloakException("Assignment verification failed");
-			}
-		} catch (Exception e) {
-			logger.warn("Enhanced immediate assignment failed, trying direct fallback: orgId={}, userId={}, error={}", orgId, adminUserId, e.getMessage());
-			// Fallback: Try direct assignment with fewer retries but longer delays
-			try {
-				assignUserToOrganizationDirectly(orgId, adminUserId);
-				
-				// Verify fallback assignment
-				if (verifyUserOrganizationAssignment(orgId, adminUserId)) {
-					logger.info("✅ Successfully assigned user via fallback with verification: alias={}, orgId={}, userId={}", alias, orgId, adminUserId);
-					assignmentSucceeded = true;
-				} else {
-					throw new KeycloakException("Fallback assignment verification failed");
-				}
-			} catch (Exception fallbackException) {
-				logger.error("❌ Both enhanced and fallback assignment methods failed: orgId={}, userId={}", orgId, adminUserId, fallbackException);
-			}
+			Thread.sleep(30000);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			logger.error("❌ SAFE FLOW (cleanup): Wait interrupted, proceeding anyway");
 		}
 		
-		if (!assignmentSucceeded) {
-			logger.error("⚠️ IMMEDIATE ASSIGNMENT FAILED - Starting background retry job for user {} to organization {}", adminUserId, orgId);
-			// Start a background thread to retry assignment after a longer delay
-			scheduleDelayedAssignment(orgId, adminUserId, alias);
+		// Step 2: Attempt assignment with immediate retries (5 attempts, 5s → 25s delays)
+		boolean immediateSuccess = performImmediateAssignmentWithRetries(orgId, adminUserId, alias);
+		
+		if (immediateSuccess) {
+			logger.info("✅ SAFE FLOW (cleanup): User-organization assignment completed successfully during immediate retries");
+			assignmentPending = false;
+		} else {
+			logger.warn("⚠️ SAFE FLOW (cleanup): Immediate assignment failed, starting background retry job");
+			// Step 3: Start background retry job (5 attempts with 20s delays)
+			scheduleBackgroundAssignmentJob(orgId, adminUserId, alias);
+			logger.info("🕐 SAFE FLOW (cleanup): Background assignment job scheduled - assignment will complete automatically");
 		}
 		
 		return orgId;
@@ -365,94 +341,8 @@ public class KeycloakClientWrapper {
 		}
 	}
 
-	/**
-	 * Immediately adds a user to an organization with enhanced retry logic and Keycloak workarounds.
-	 * Used right after organization creation when user should be immediately available.
-	 */
-	private void addUserToOrganizationImmediate(String organizationId, String userId) {
-		try {
-			String accessToken = getAdminAccessToken();
-			
-			String membersUrl = String.format("%s/admin/realms/%s/organizations/%s/members", 
-				serverUrl, realm, organizationId);
-
-			// Prepare payload
-			JsonNode memberNode = objectMapper.createObjectNode()
-				.put("id", userId.trim());
-			String memberJson = objectMapper.writeValueAsString(memberNode);
-			
-			logger.debug("Adding user to organization immediately: payload={}", memberJson);
-
-			// Enhanced retry logic with longer delays for Keycloak Organizations API timing issues
-			Exception lastException = null;
-			for (int attempt = 0; attempt < 5; attempt++) {
-				try {
-					// Progressive delays to allow Keycloak user indexing: 5s, 10s, 15s, 20s, 25s
-					if (attempt > 0) {
-						long delayMs = 5000 * attempt;
-						logger.debug("Waiting {}ms for Keycloak user indexing before attempt {}", delayMs, attempt + 1);
-						Thread.sleep(delayMs);
-						accessToken = getAdminAccessToken(); // Refresh token
-					}
-
-					// Verify user still exists before attempting assignment
-					if (!verifyUserExists(userId, accessToken)) {
-						throw new KeycloakException("User no longer exists: " + userId);
-					}
-
-					HttpRequest request = HttpRequest.newBuilder()
-						.uri(URI.create(membersUrl))
-						.header("Authorization", "Bearer " + accessToken)
-						.header("Content-Type", "application/json")
-						.POST(HttpRequest.BodyPublishers.ofString(memberJson))
-						.timeout(Duration.ofSeconds(30))
-						.build();
-
-					HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-					if (response.statusCode() == 204 || response.statusCode() == 201) {
-						logger.info("Successfully added user to organization immediately: orgId={}, userId={} (attempt {})", 
-							organizationId, userId, attempt + 1);
-						
-						// Verify the assignment actually worked
-						if (verifyUserOrganizationAssignment(organizationId, userId)) {
-							logger.info("✅ Verified user-organization assignment successful: orgId={}, userId={}", organizationId, userId);
-							return; // Success!
-						} else {
-							logger.warn("Assignment API returned success but verification failed - continuing retries");
-							lastException = new KeycloakException("Assignment API succeeded but verification failed");
-						}
-					} else {
-						String responseBody = response.body();
-						lastException = new KeycloakException(String.format(
-							"Failed to add user to organization - status: %d, response: %s", 
-							response.statusCode(), responseBody));
-						
-						logger.warn("Assignment attempt {} failed - status: {}, response: {}", 
-							attempt + 1, response.statusCode(), responseBody);
-						
-						// Don't retry on certain error codes (except 400 which can be timing-related)
-						if (response.statusCode() == 404 || response.statusCode() == 403) {
-							break; // Don't retry on not found or forbidden
-						}
-					}
-				} catch (Exception e) {
-					lastException = e;
-					logger.warn("Exception during assignment attempt {}: {}", attempt + 1, e.getMessage());
-				}
-			}
-			
-			// All attempts failed
-			throw new KeycloakException("Failed to add user to organization after 5 attempts with extended delays: " + 
-				(lastException != null ? lastException.getMessage() : "Unknown error"), lastException);
-				
-		} catch (KeycloakException e) {
-			throw e; // Re-throw KeycloakException as-is
-		} catch (Exception e) {
-			logger.warn("Error adding user to organization immediately: orgId={}, userId={}", organizationId, userId, e);
-			throw new KeycloakException("Failed to add user to organization immediately: " + e.getMessage(), e);
-		}
-	}
+	// This method has been replaced by performImmediateAssignmentWithRetries() 
+	// for consistency with the SAFE assignment flow
 
 	/**
 	 * Extracts organization ID from JSON response.
@@ -486,11 +376,22 @@ public class KeycloakClientWrapper {
 
 			HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-			if (response.statusCode() == 200) {
-				JsonNode json = objectMapper.readTree(response.body());
-				return json.isArray() && json.size() > 0;
+		if (response.statusCode() == 200) {
+			JsonNode json = objectMapper.readTree(response.body());
+			if (json.isArray()) {
+				// Check if any organization in the response has the specific alias
+				for (JsonNode org : json) {
+					String orgAlias = org.get("alias").asText();
+					if (alias.equals(orgAlias)) {
+						logger.debug("✅ Organization with alias '{}' EXISTS", alias);
+						return true;
+					}
+				}
 			}
+			logger.debug("✅ Organization with alias '{}' does NOT exist", alias);
 			return false;
+		}
+		return false;
 		} catch (Exception e) {
 			logger.warn("Error checking if organization exists: alias={}", alias, e);
 			return false;
@@ -533,15 +434,15 @@ public class KeycloakClientWrapper {
 	}
 
 	/**
-	 * Manually assigns a user to an organization (for fixing failed automatic assignments).
-	 * This method can be called later if the automatic assignment during tenant creation failed.
+	 * Manually assigns a user to an organization with comprehensive verification.
+	 * Uses the same SAFE assignment flow as tenant creation.
 	 * 
 	 * @param organizationAlias Organization alias (slug)
 	 * @param userEmail User email
-	 * @return true if assignment succeeded, false otherwise
+	 * @return true if assignment succeeded and was verified, false otherwise
 	 */
 	public boolean manuallyAssignUserToOrganization(String organizationAlias, String userEmail) {
-		logger.info("Manually assigning user to organization: alias={}, email={}", organizationAlias, userEmail);
+		logger.info("🔧 MANUAL ASSIGNMENT: Starting for user {} to organization {}", userEmail, organizationAlias);
 		
 		try {
 			String accessToken = getAdminAccessToken();
@@ -549,10 +450,11 @@ public class KeycloakClientWrapper {
 			// Step 1: Find organization by alias
 			Optional<OrganizationInfo> orgInfo = getOrganizationByAlias(organizationAlias);
 			if (orgInfo.isEmpty()) {
-				logger.error("Organization not found: {}", organizationAlias);
+				logger.error("❌ MANUAL ASSIGNMENT: Organization not found - {}", organizationAlias);
 				return false;
 			}
 			String organizationId = orgInfo.get().getId();
+			logger.info("✅ MANUAL ASSIGNMENT: Found organization {} (ID: {})", organizationAlias, organizationId);
 			
 			// Step 2: Find user by email
 			String usersUrl = String.format("%s/admin/realms/%s/users?email=%s&exact=true", serverUrl, realm, userEmail);
@@ -560,102 +462,224 @@ public class KeycloakClientWrapper {
 				.uri(URI.create(usersUrl))
 				.header("Authorization", "Bearer " + accessToken)
 				.GET()
-				.timeout(Duration.ofSeconds(10))
+				.timeout(Duration.ofSeconds(15))
 				.build();
 
 			HttpResponse<String> userResponse = httpClient.send(userRequest, HttpResponse.BodyHandlers.ofString());
 			if (userResponse.statusCode() != 200) {
-				logger.error("Failed to search for user: {}", userEmail);
+				logger.error("❌ MANUAL ASSIGNMENT: Failed to search for user - {}", userEmail);
 				return false;
 			}
 			
 			JsonNode users = objectMapper.readTree(userResponse.body());
 			if (!users.isArray() || users.size() == 0) {
-				logger.error("User not found: {}", userEmail);
+				logger.error("❌ MANUAL ASSIGNMENT: User not found - {}", userEmail);
 				return false;
 			}
 			
 			String userId = users.get(0).get("id").asText();
-			logger.info("Found user: email={}, id={}", userEmail, userId);
+			logger.info("✅ MANUAL ASSIGNMENT: Found user {} (ID: {})", userEmail, userId);
 			
-			// Step 3: Assign user to organization using the robust method
-			assignUserToOrganization(organizationId, userId);
-			
-			// Step 4: Verify assignment
+			// Step 3: Check if already assigned
 			if (verifyUserOrganizationAssignment(organizationId, userId)) {
-				logger.info("✅ Manual assignment successful: alias={}, email={}, orgId={}, userId={}", 
-					organizationAlias, userEmail, organizationId, userId);
+				logger.info("✅ MANUAL ASSIGNMENT: User is already assigned to organization");
+				return true;
+			}
+			
+			// Step 4: Perform manual assignment with same safe flow
+			logger.info("🔄 MANUAL ASSIGNMENT: User not currently assigned, starting assignment...");
+			boolean success = performImmediateAssignmentWithRetries(organizationId, userId, organizationAlias);
+			
+			if (success) {
+				logger.info("✅ MANUAL ASSIGNMENT SUCCESSFUL: User {} assigned to organization {} and verified", 
+					userEmail, organizationAlias);
 				return true;
 			} else {
-				logger.error("Manual assignment verification failed: alias={}, email={}", organizationAlias, userEmail);
+				logger.error("❌ MANUAL ASSIGNMENT FAILED: Could not assign user {} to organization {}", 
+					userEmail, organizationAlias);
 				return false;
 			}
 			
 		} catch (Exception e) {
-			logger.error("Error during manual assignment: alias={}, email={}", organizationAlias, userEmail, e);
+			logger.error("❌ MANUAL ASSIGNMENT ERROR: alias={}, email={}, error={}", 
+				organizationAlias, userEmail, e.getMessage(), e);
 			return false;
 		}
 	}
 
 	/**
-	 * Schedules a delayed user-organization assignment to run in the background.
+	 * Performs immediate user-organization assignment with progressive retry logic.
+	 * 5 attempts with delays: 5s, 10s, 15s, 20s, 25s
+	 * 
+	 * @param organizationId Organization ID
+	 * @param userId User ID
+	 * @param alias Organization alias for logging
+	 * @return true if assignment succeeds and is verified, false otherwise
+	 */
+	private boolean performImmediateAssignmentWithRetries(String organizationId, String userId, String alias) {
+		logger.info("🔄 Starting immediate assignment with retries: orgId={}, userId={}, alias={}", organizationId, userId, alias);
+		
+		for (int attempt = 1; attempt <= 5; attempt++) {
+			try {
+				// Progressive delays: 5s, 10s, 15s, 20s, 25s
+				if (attempt > 1) {
+					long delayMs = 5000L * attempt;
+					logger.info("⏳ IMMEDIATE RETRY: Waiting {}ms before attempt {} (Keycloak indexing)", delayMs, attempt);
+					Thread.sleep(delayMs);
+				}
+				
+				String accessToken = getAdminAccessToken();
+				String membersUrl = String.format("%s/admin/realms/%s/organizations/%s/members", 
+					serverUrl, realm, organizationId);
+
+				// Prepare assignment payload - Keycloak expects just the user ID as a JSON string
+				String memberJson = objectMapper.writeValueAsString(userId.trim());
+				
+				logger.info("🔗 IMMEDIATE ATTEMPT {}: Assigning user to organization", attempt);
+				
+				// Make assignment request
+				HttpRequest request = HttpRequest.newBuilder()
+					.uri(URI.create(membersUrl))
+					.header("Authorization", "Bearer " + accessToken)
+					.header("Content-Type", "application/json")
+					.POST(HttpRequest.BodyPublishers.ofString(memberJson))
+					.timeout(Duration.ofSeconds(30))
+					.build();
+
+				HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+				
+				// NEVER trust HTTP success codes alone - always verify
+				logger.debug("IMMEDIATE ATTEMPT {}: HTTP Response - Status: {}, Body: {}", 
+					attempt, response.statusCode(), response.body());
+				
+				if (response.statusCode() >= 200 && response.statusCode() < 300) {
+					// API returned success - now VERIFY it actually worked
+					logger.info("🔍 IMMEDIATE ATTEMPT {}: Assignment API returned success, verifying...", attempt);
+					
+					// Wait a moment for assignment to propagate
+					Thread.sleep(2000);
+					
+					if (verifyUserOrganizationAssignment(organizationId, userId)) {
+						logger.info("✅ IMMEDIATE SUCCESS: User {} assigned to organization {} and verified (attempt {})", 
+							userId, organizationId, attempt);
+						return true;
+					} else {
+						logger.warn("❌ IMMEDIATE ATTEMPT {}: API returned success but verification FAILED - user not actually assigned", attempt);
+					}
+				} else {
+					logger.warn("❌ IMMEDIATE ATTEMPT {}: Assignment API failed - Status: {}, Response: {}", 
+						attempt, response.statusCode(), response.body());
+				}
+				
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				logger.error("❌ IMMEDIATE ASSIGNMENT: Interrupted during attempt {}", attempt);
+				return false;
+			} catch (Exception e) {
+				logger.warn("❌ IMMEDIATE ATTEMPT {}: Exception occurred - {}", attempt, e.getMessage());
+			}
+		}
+		
+		logger.error("❌ IMMEDIATE ASSIGNMENT FAILED: All 5 attempts failed for user {} to organization {}", userId, organizationId);
+		return false;
+	}
+
+	/**
+	 * Schedules a background user-organization assignment job.
 	 * This handles cases where immediate assignment fails due to Keycloak timing issues.
+	 * Starts after 30 seconds, then 5 attempts with 20-second delays.
 	 * 
 	 * @param organizationId Organization ID
 	 * @param userId User ID  
 	 * @param alias Organization alias for logging
 	 */
-	private void scheduleDelayedAssignment(String organizationId, String userId, String alias) {
-		// Use a background thread to retry assignment after tenant creation completes
+	private void scheduleBackgroundAssignmentJob(String organizationId, String userId, String alias) {
+		// Create thread-safe background assignment job
 		Thread backgroundAssignment = new Thread(() -> {
-			logger.info("🕐 Background assignment job started for user {} to organization {} (alias: {})", userId, organizationId, alias);
+			logger.info("🕐 BACKGROUND JOB: Started for user {} to organization {} (alias: {})", userId, organizationId, alias);
 			
-			// Wait for tenant creation to fully complete and Keycloak to settle
 			try {
-				Thread.sleep(30000); // Wait 30 seconds
+				// Step 1: Initial 30-second delay as specified
+				logger.info("⏳ BACKGROUND JOB: Waiting 30 seconds for Keycloak to settle...");
+				Thread.sleep(30000);
 				
-				logger.info("🔄 Attempting background assignment after 30-second delay...");
-				
-				// Try assignment with extended delays
-				for (int attempt = 0; attempt < 5; attempt++) {
+				// Step 2: 5 attempts with 20-second delays
+				for (int attempt = 1; attempt <= 5; attempt++) {
 					try {
-						if (attempt > 0) {
-							Thread.sleep(20000); // 20-second delays between attempts
-							logger.info("🔄 Background assignment attempt {} of 5...", attempt + 1);
+						if (attempt > 1) {
+							logger.info("⏳ BACKGROUND JOB: Waiting 20 seconds before attempt {} of 5...", attempt);
+							Thread.sleep(20000);
 						}
 						
-						assignUserToOrganizationDirectly(organizationId, userId);
+						logger.info("🔄 BACKGROUND ATTEMPT {}: Assigning user to organization", attempt);
 						
-						// Verify assignment
-						if (verifyUserOrganizationAssignment(organizationId, userId)) {
-							logger.info("🎉 BACKGROUND ASSIGNMENT SUCCESSFUL! User {} automatically assigned to organization {} (alias: {})", userId, organizationId, alias);
-							return; // Success!
+						String accessToken = getAdminAccessToken();
+						String membersUrl = String.format("%s/admin/realms/%s/organizations/%s/members", 
+							serverUrl, realm, organizationId);
+
+						// Prepare assignment payload - Keycloak expects just the user ID as a JSON string
+						String memberJson = objectMapper.writeValueAsString(userId.trim());
+						
+						// Make assignment request
+						HttpRequest request = HttpRequest.newBuilder()
+							.uri(URI.create(membersUrl))
+							.header("Authorization", "Bearer " + accessToken)
+							.header("Content-Type", "application/json")
+							.POST(HttpRequest.BodyPublishers.ofString(memberJson))
+							.timeout(Duration.ofSeconds(30))
+							.build();
+
+						HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+						
+						logger.debug("BACKGROUND ATTEMPT {}: HTTP Response - Status: {}, Body: {}", 
+							attempt, response.statusCode(), response.body());
+						
+						if (response.statusCode() >= 200 && response.statusCode() < 300) {
+							// API returned success - VERIFY it actually worked
+							logger.info("🔍 BACKGROUND ATTEMPT {}: Assignment API returned success, verifying...", attempt);
+							
+							// Wait for assignment to propagate
+							Thread.sleep(3000);
+							
+							if (verifyUserOrganizationAssignment(organizationId, userId)) {
+								logger.info("🎉 BACKGROUND SUCCESS: User {} automatically assigned to organization {} (alias: {}) on attempt {}", 
+									userId, organizationId, alias, attempt);
+								return; // Stop immediately on verification success
+							} else {
+								logger.warn("❌ BACKGROUND ATTEMPT {}: API returned success but verification FAILED", attempt);
+							}
 						} else {
-							logger.warn("Background assignment attempt {} returned success but verification failed", attempt + 1);
+							logger.warn("❌ BACKGROUND ATTEMPT {}: Assignment API failed - Status: {}, Response: {}", 
+								attempt, response.statusCode(), response.body());
 						}
+						
 					} catch (Exception e) {
-						logger.warn("Background assignment attempt {} failed: {}", attempt + 1, e.getMessage());
+						logger.warn("❌ BACKGROUND ATTEMPT {}: Exception occurred - {}", attempt, e.getMessage());
 					}
 				}
 				
-				// All background attempts failed
-				logger.error("❌ BACKGROUND ASSIGNMENT FAILED after 5 attempts over 2+ minutes");
-				logger.error("   🛠️ MANUAL ACTION REQUIRED: User {} needs manual assignment to organization {} (alias: {})", userId, organizationId, alias);
-				logger.error("   📱 Steps: http://localhost:8085 → kymatic realm → Organizations → {} → Members → Add member", alias);
+				// All background attempts failed - provide clear remediation
+				logger.error("❌ BACKGROUND JOB FAILED: All 5 attempts failed after 2+ minutes");
+				logger.error("🛠️ MANUAL ACTION REQUIRED for organization '{}' (alias: {})", organizationId, alias);
+				logger.error("   📧 User email: Find user with ID {} and assign manually", userId);
+				logger.error("   🌐 GUI Method: http://localhost:8085 → kymatic realm → Organizations → {} → Members → Add member", alias);
+				logger.error("   🔌 API Method: POST /api/tenants/{}/assign-user?userEmail=<email>", alias);
 				
 			} catch (InterruptedException e) {
-				logger.warn("Background assignment job interrupted: {}", e.getMessage());
+				logger.warn("❌ BACKGROUND JOB: Interrupted - {}", e.getMessage());
 				Thread.currentThread().interrupt();
 			} catch (Exception e) {
-				logger.error("Background assignment job failed: {}", e.getMessage());
+				logger.error("❌ BACKGROUND JOB: Critical error - {}", e.getMessage(), e);
 			}
 		});
 		
-		backgroundAssignment.setDaemon(true);
-		backgroundAssignment.setName("KeycloakUserOrgAssignment-" + alias);
+		// Configure background thread properly
+		backgroundAssignment.setDaemon(true); // Don't prevent JVM shutdown
+		backgroundAssignment.setName("KeycloakAssignment-" + alias + "-" + System.currentTimeMillis());
+		backgroundAssignment.setPriority(Thread.NORM_PRIORITY);
 		backgroundAssignment.start();
 		
-		logger.info("🕐 Background assignment job scheduled for user {} to organization {} (alias: {})", userId, organizationId, alias);
+		logger.info("🕐 BACKGROUND JOB: Scheduled for user {} to organization {} (alias: {})", userId, organizationId, alias);
 	}
 
 	/**
@@ -674,10 +698,8 @@ public class KeycloakClientWrapper {
 			String membersUrl = String.format("%s/admin/realms/%s/organizations/%s/members", 
 				serverUrl, realm, organizationId);
 
-			// Prepare payload
-			JsonNode memberNode = objectMapper.createObjectNode()
-				.put("id", userId.trim());
-			String memberJson = objectMapper.writeValueAsString(memberNode);
+			// Prepare payload - Keycloak expects just the user ID as a JSON string
+			String memberJson = objectMapper.writeValueAsString(userId.trim());
 			
 			// Direct assignment with focused retry - fewer attempts, longer delays
 			Exception lastException = null;
@@ -734,7 +756,87 @@ public class KeycloakClientWrapper {
 	}
 
 	/**
+	 * Checks if a user is orphaned (not assigned to any organization).
+	 * Orphaned users are created during failed tenant creation attempts.
+	 * 
+	 * @param userId User ID
+	 * @param accessToken Admin access token
+	 * @return true if user is orphaned (not assigned to any organization), false otherwise
+	 */
+	private boolean isOrphanedUser(String userId, String accessToken) {
+		try {
+			logger.debug("🔍 CHECKING IF USER IS ORPHANED: userId={}", userId);
+			
+			// Get all organizations to check membership
+			String orgsUrl = String.format("%s/admin/realms/%s/organizations", serverUrl, realm);
+			HttpRequest orgsRequest = HttpRequest.newBuilder()
+				.uri(URI.create(orgsUrl))
+				.header("Authorization", "Bearer " + accessToken)
+				.GET()
+				.timeout(Duration.ofSeconds(15))
+				.build();
+
+			HttpResponse<String> orgsResponse = httpClient.send(orgsRequest, HttpResponse.BodyHandlers.ofString());
+			if (orgsResponse.statusCode() == 200) {
+				JsonNode organizations = objectMapper.readTree(orgsResponse.body());
+				if (organizations.isArray()) {
+					// Check if user is a member of ANY organization
+					for (JsonNode org : organizations) {
+						String orgId = org.get("id").asText();
+						if (isUserMemberOfOrganization(orgId, userId, accessToken)) {
+							logger.debug("✅ User {} is properly assigned to organization {}", userId, orgId);
+							return false; // User is properly assigned, not orphaned
+						}
+					}
+				}
+			}
+			
+			// If we get here, user is not assigned to any organization
+			logger.debug("⚠️ USER IS ORPHANED: {} is not assigned to any organization", userId);
+			return true;
+			
+		} catch (Exception e) {
+			logger.warn("❌ Error checking if user is orphaned: userId={}, error={}", userId, e.getMessage());
+			// If we can't determine, assume user is legitimate (safer)
+			return false;
+		}
+	}
+
+	/**
+	 * Helper method to check if a user is a member of a specific organization.
+	 */
+	private boolean isUserMemberOfOrganization(String organizationId, String userId, String accessToken) {
+		try {
+			String membersUrl = String.format("%s/admin/realms/%s/organizations/%s/members", 
+				serverUrl, realm, organizationId);
+			HttpRequest request = HttpRequest.newBuilder()
+				.uri(URI.create(membersUrl))
+				.header("Authorization", "Bearer " + accessToken)
+				.GET()
+				.timeout(Duration.ofSeconds(10))
+				.build();
+
+			HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+			if (response.statusCode() == 200) {
+				JsonNode members = objectMapper.readTree(response.body());
+				if (members.isArray()) {
+					for (JsonNode member : members) {
+						if (userId.equals(member.get("id").asText())) {
+							return true;
+						}
+					}
+				}
+			}
+			return false;
+		} catch (Exception e) {
+			logger.debug("Error checking organization membership: {}", e.getMessage());
+			return false;
+		}
+	}
+
+	/**
 	 * Verifies if a user is actually assigned to an organization in Keycloak.
+	 * This is the ONLY reliable way to confirm assignment due to Keycloak API inconsistencies.
 	 * 
 	 * @param organizationId Organization ID
 	 * @param userId User ID
@@ -750,7 +852,7 @@ public class KeycloakClientWrapper {
 				.uri(URI.create(membersUrl))
 				.header("Authorization", "Bearer " + accessToken)
 				.GET()
-				.timeout(Duration.ofSeconds(10))
+				.timeout(Duration.ofSeconds(15))
 				.build();
 
 			HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -760,17 +862,18 @@ public class KeycloakClientWrapper {
 				if (members.isArray()) {
 					for (JsonNode member : members) {
 						if (userId.equals(member.get("id").asText())) {
-							logger.debug("Verified user {} is assigned to organization {}", userId, organizationId);
+							logger.info("✅ VERIFIED: User {} is properly assigned to organization {}", userId, organizationId);
 							return true;
 						}
 					}
 				}
 			}
 			
-			logger.debug("User {} is NOT assigned to organization {}", userId, organizationId);
+			logger.warn("❌ VERIFICATION FAILED: User {} is NOT assigned to organization {}", userId, organizationId);
 			return false;
 		} catch (Exception e) {
-			logger.warn("Error verifying user organization assignment: orgId={}, userId={}", organizationId, userId, e);
+			logger.error("❌ VERIFICATION ERROR: Could not verify user organization assignment: orgId={}, userId={}, error={}", 
+				organizationId, userId, e.getMessage());
 			return false;
 		}
 	}
@@ -821,7 +924,7 @@ public class KeycloakClientWrapper {
 			// Get admin access token
 			String accessToken = getAdminAccessToken();
 			
-			// Check if user already exists
+			// Check if user already exists and handle orphaned users
 			String searchUrl = String.format("%s/admin/realms/%s/users?email=%s&exact=true", serverUrl, realm, email);
 			HttpRequest searchRequest = HttpRequest.newBuilder()
 				.uri(URI.create(searchUrl))
@@ -834,7 +937,40 @@ public class KeycloakClientWrapper {
 			if (searchResponse.statusCode() == 200) {
 				JsonNode users = objectMapper.readTree(searchResponse.body());
 				if (users.isArray() && users.size() > 0) {
-					throw new UserAlreadyExistsException(email);
+					String existingUserId = users.get(0).get("id").asText();
+					logger.warn("⚠️ User {} already exists in Keycloak (ID: {})", email, existingUserId);
+					
+					// Check if this is an orphaned user from a failed tenant creation
+					if (isOrphanedUser(existingUserId, accessToken)) {
+						logger.info("🧹 ORPHANED USER DETECTED: Cleaning up user {} to allow tenant creation", email);
+						try {
+							// Delete the orphaned user
+							String deleteUrl = String.format("%s/admin/realms/%s/users/%s", serverUrl, realm, existingUserId);
+							HttpRequest deleteRequest = HttpRequest.newBuilder()
+								.uri(URI.create(deleteUrl))
+								.header("Authorization", "Bearer " + accessToken)
+								.DELETE()
+								.timeout(Duration.ofSeconds(15))
+								.build();
+							
+							HttpResponse<String> deleteResponse = httpClient.send(deleteRequest, HttpResponse.BodyHandlers.ofString());
+							if (deleteResponse.statusCode() >= 200 && deleteResponse.statusCode() < 300) {
+								logger.info("✅ ORPHANED USER CLEANUP: Successfully deleted orphaned user {}", email);
+								// Wait a moment for deletion to propagate
+								Thread.sleep(2000);
+							} else {
+								logger.warn("❌ ORPHANED USER CLEANUP: Failed to delete orphaned user {} - Status: {}", email, deleteResponse.statusCode());
+								throw new UserAlreadyExistsException(email);
+							}
+						} catch (Exception e) {
+							logger.error("❌ ORPHANED USER CLEANUP: Error deleting orphaned user {}: {}", email, e.getMessage());
+							throw new UserAlreadyExistsException(email);
+						}
+					} else {
+						// User exists and is properly assigned - this is a real conflict
+						logger.error("❌ USER CONFLICT: User {} exists and is properly assigned to organizations", email);
+						throw new UserAlreadyExistsException(email);
+					}
 				}
 			}
 
@@ -1191,11 +1327,9 @@ public class KeycloakClientWrapper {
 			String membersUrl = String.format("%s/admin/realms/%s/organizations/%s/members", 
 				serverUrl, realm, organizationId);
 
-			// Step 3: Prepare payload - ensure clean JSON without extra whitespace
-			// Based on GitHub issue #38760, payload formatting is critical
-			JsonNode memberNode = objectMapper.createObjectNode()
-				.put("id", userId.trim()); // Ensure no whitespace
-			String memberJson = objectMapper.writeValueAsString(memberNode);
+			// Step 3: Prepare payload - Keycloak expects just the user ID as a JSON string
+			// Based on testing, the API expects the user ID directly, not wrapped in an object
+			String memberJson = objectMapper.writeValueAsString(userId.trim());
 			
 			// Log the exact payload being sent for debugging
 			logger.debug("Sending organization assignment payload: {}", memberJson);

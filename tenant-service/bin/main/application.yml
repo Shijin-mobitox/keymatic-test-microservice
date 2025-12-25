@@ -63,12 +63,30 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          # Keycloak issuer URI - used to validate JWT tokens
-          # The realm name should match your Keycloak realm configuration
-          issuer-uri: http://keycloak:8080/realms/kymatic
-          # JWK Set URI - used to fetch public keys for token validation
-          # Spring Boot will auto-configure this from issuer-uri if not specified
-          jwk-set-uri: http://keycloak:8080/realms/kymatic/protocol/openid-connect/certs
+          # Keycloak issuer URI - configurable via environment variables
+          # Default to local for backward compatibility, but can be overridden
+          issuer-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI:http://keycloak:8080/realms/kymatic}
+          # JWK Set URI - Spring Boot will auto-configure this from issuer-uri if not specified
+          # But can be explicitly set via environment variable if needed
+          jwk-set-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:}
+
+# Keycloak Admin Client Configuration (for tenant-service operations)
+keycloak:
+  admin:
+    server-url: ${KEYCLOAK_BASE_URL:http://localhost:8085}
+    realm: ${KEYCLOAK_REALM:kymatic}
+    client-id: ${KEYCLOAK_CLIENT_ID:admin-cli}
+    client-secret: ${KEYCLOAK_CLIENT_SECRET:}
+    username: ${KEYCLOAK_ADMIN_USERNAME:admin}
+    password: ${KEYCLOAK_ADMIN_PASSWORD:admin}
+    # Use client credentials grant type for service account authentication
+    grant-type: ${KEYCLOAK_ADMIN_GRANT_TYPE:password}
+    # Connection pool settings
+    connection-pool-size: ${KEYCLOAK_ADMIN_POOL_SIZE:10}
+    # Development feature: cleanup existing organizations before creating new ones
+    # WARNING: Only use this in development/testing environments
+    # DISABLED: To allow multiple organizations to coexist
+    organization-cleanup-enabled: ${KEYCLOAK_ORG_CLEANUP_ENABLED:false}
 
 # Arconia multi-tenancy configuration
 arconia:
@@ -108,22 +126,6 @@ workflow:
   service:
     base-url: ${WORKFLOW_SERVICE_URL:http://localhost:8090}
 
-# Keycloak Admin Client configuration for Organizations API
-keycloak:
-  admin:
-    server-url: ${KEYCLOAK_SERVER_URL:http://keycloak:8080}
-    realm: ${KEYCLOAK_REALM:kymatic}
-    client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:admin-cli}
-    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:}
-    username: ${KEYCLOAK_ADMIN_USERNAME:admin}
-    password: ${KEYCLOAK_ADMIN_PASSWORD:admin}
-    # Use client credentials grant type for service account authentication
-    grant-type: ${KEYCLOAK_ADMIN_GRANT_TYPE:password}
-    # Connection pool settings
-    connection-pool-size: ${KEYCLOAK_ADMIN_POOL_SIZE:10}
-    # Development feature: cleanup existing organizations before creating new ones
-    # WARNING: Only use this in development/testing environments
-    organization-cleanup-enabled: ${KEYCLOAK_ORG_CLEANUP_ENABLED:true}
 
 # SpringDoc OpenAPI configuration
 springdoc:
