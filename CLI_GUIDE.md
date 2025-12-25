@@ -272,7 +272,7 @@ $token = (Invoke-RestMethod -Uri "http://localhost:8085/realms/kymatic/protocol/
     -Body @{grant_type="password";client_id="api-service";client_secret="api-secret";username="user1";password="password"}).access_token
 
 # Test endpoint
-Invoke-RestMethod -Uri "http://localhost:8084/api/me" `
+Invoke-RestMethod -Uri "http://localhost:8090/api/workflows/tenants/provision" -Method Post -ContentType "application/json" -Body '{"tenantName":"Test","slug":"test"}' `
     -Headers @{Authorization="Bearer $token"} | ConvertTo-Json
 ```
 

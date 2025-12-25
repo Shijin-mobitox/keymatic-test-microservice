@@ -46,37 +46,6 @@ services:
     networks:
       - kymatic-network
 
-  gateway-service:
-    build: ./gateway-service
-    ports:
-      - "8081:8080"
-    depends_on:
-      - keycloak
-      - postgres-db
-    networks:
-      - kymatic-network
-    environment:
-      # Configurable Keycloak URLs
-      - KEYCLOAK_BASE_URL=${KEYCLOAK_BASE_URL:-http://keycloak:8080}
-      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-kymatic}
-
-  auth-service:
-    build: ./auth-service
-    ports:
-      - "8082:8080"
-    depends_on:
-      - keycloak
-      - postgres-db
-    networks:
-      - kymatic-network
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/postgres
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=root
-      # Configurable Keycloak URLs
-      - KEYCLOAK_BASE_URL=${KEYCLOAK_BASE_URL:-http://keycloak:8080}
-      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-kymatic}
-
   tenant-service:
     build:
       context: .
@@ -100,24 +69,6 @@ services:
       - SERVER_PORT=8083
       # CRITICAL FIX: Force disable organization cleanup to allow multiple organizations
       - KEYCLOAK_ORG_CLEANUP_ENABLED=false
-
-  api-service:
-    build: ./api-service
-    ports:
-      - "8084:8080"
-      - "8086:8086"
-    depends_on:
-      - keycloak
-    networks:
-      - kymatic-network
-    environment:
-      # Use host machine PostgreSQL instead of Docker postgres-db
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/postgres
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=root
-      # Configurable Keycloak URLs
-      - KEYCLOAK_BASE_URL=${KEYCLOAK_BASE_URL:-http://keycloak:8080}
-      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-kymatic}
 
   workflow-service:
     build:

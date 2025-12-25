@@ -8,12 +8,10 @@ This document confirms that **all requirements** for multi-tenant authentication
 
 ## 📋 Services Overview
 
-The project consists of **4 microservices**, all implementing multi-tenant authentication:
+The project consists of **2 microservices**, implementing multi-tenant authentication:
 
 1. **tenant-service** - Multi-tenant handler (✅ Complete)
-2. **api-service** - Protected business API (✅ Complete)
-3. **auth-service** - Keycloak integration service (✅ Complete)
-4. **gateway-service** - API Gateway (reactive) (✅ Complete)
+2. **workflow-service** - Workflow orchestration service (✅ Complete)
 
 ---
 
@@ -30,25 +28,6 @@ The project consists of **4 microservices**, all implementing multi-tenant authe
 - [x] Integration tests with Testcontainers
 - [x] Docker Compose configuration
 
-### 2. api-service ✅
-- [x] Arconia framework integration
-- [x] Keycloak OAuth2 Resource Server configuration
-- [x] TenantResolver filter (using shared TenantContext)
-- [x] TenantContext usage (shared module)
-- [x] TenantAwareController with `/api/me` endpoint
-- [x] application.yml with OAuth2 and datasource config
-- [x] Arconia multi-tenancy configuration
-- [x] Integration tests with Testcontainers
-- [x] Docker Compose configuration
-
-### 3. auth-service ✅
-- [x] Arconia framework integration
-- [x] Keycloak OAuth2 Resource Server configuration
-- [x] JwtTenantResolver filter
-- [x] TenantContext usage (shared module)
-- [x] TenantAwareController with `/api/me` endpoint
-- [x] application.yml with OAuth2 and datasource config
-- [x] Arconia multi-tenancy configuration
 - [x] Integration tests with Testcontainers
 - [x] Docker Compose configuration
 

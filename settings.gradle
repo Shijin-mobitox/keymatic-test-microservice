@@ -1,2 +1,2 @@
 rootProject.name = 'KyMaticServiceV1'
-include 'auth-service', 'tenant-service', 'gateway-service', 'api-service', 'shared', 'workflow-service'
+include 'tenant-service', 'shared', 'workflow-service'

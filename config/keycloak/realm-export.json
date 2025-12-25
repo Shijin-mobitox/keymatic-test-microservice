@@ -63,14 +63,6 @@
   ],
   "clients": [
     {
-      "clientId": "gateway-service",
-      "enabled": true,
-      "publicClient": false,
-      "secret": "gateway-secret",
-      "redirectUris": ["*"],
-      "protocol": "openid-connect"
-    },
-    {
       "clientId": "react-client",
       "enabled": true,
       "publicClient": true,
@@ -84,14 +76,6 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
       "implicitFlowEnabled": false
-    },
-    {
-      "clientId": "api-service",
-      "enabled": true,
-      "publicClient": false,
-      "secret": "api-secret",
-      "redirectUris": ["*"],
-      "protocol": "openid-connect"
     },
     {
       "clientId": "tenant-service",

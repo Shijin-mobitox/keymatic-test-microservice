@@ -79,20 +79,7 @@ Invoke-RestMethod -Uri "http://localhost:8083/api/me" `
     -Headers @{Authorization="Bearer $token"}
 ```
 
-### 2. Test API Service
-
-```powershell
-# Get token
-$token = (Invoke-RestMethod -Uri "http://localhost:8085/realms/kymatic/protocol/openid-connect/token" `
-    -Method Post -ContentType "application/x-www-form-urlencoded" `
-    -Body @{grant_type="password";client_id="api-service";client_secret="api-secret";username="user1";password="password"}).access_token
-
-# Call /api/me endpoint
-Invoke-RestMethod -Uri "http://localhost:8084/api/me" `
-    -Headers @{Authorization="Bearer $token"}
-```
-
-### 3. Test Auth Service
+### 2. Test Workflow Service
 
 ```powershell
 # Get token
@@ -100,22 +87,11 @@ $token = (Invoke-RestMethod -Uri "http://localhost:8085/realms/kymatic/protocol/
     -Method Post -ContentType "application/x-www-form-urlencoded" `
     -Body @{grant_type="password";client_id="tenant-service";client_secret="tenant-secret";username="user1";password="password"}).access_token
 
-# Call /api/me endpoint
-Invoke-RestMethod -Uri "http://localhost:8082/api/me" `
-    -Headers @{Authorization="Bearer $token"}
-```
-
-### 4. Test Gateway Service
-
-```powershell
-# Get token
-$token = (Invoke-RestMethod -Uri "http://localhost:8085/realms/kymatic/protocol/openid-connect/token" `
-    -Method Post -ContentType "application/x-www-form-urlencoded" `
-    -Body @{grant_type="password";client_id="gateway-service";client_secret="gateway-secret";username="user1";password="password"}).access_token
-
-# Call /api/me endpoint
-Invoke-RestMethod -Uri "http://localhost:8081/api/me" `
-    -Headers @{Authorization="Bearer $token"}
+# Test workflow provisioning endpoint
+Invoke-RestMethod -Uri "http://localhost:8090/api/workflows/tenants/provision" `
+    -Method Post -ContentType "application/json" `
+    -Headers @{Authorization="Bearer $token"} `
+    -Body '{"tenantName":"Test Tenant","slug":"test"}'
 ```
 
 ## 🔍 Health Checks
