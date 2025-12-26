@@ -29,8 +29,8 @@
       <bpmn:outgoing>Flow_5</bpmn:outgoing>
     </bpmn:serviceTask>
     
-    <!-- Step 5: Save Tenant Record -->
-    <bpmn:serviceTask id="ServiceTask_SaveTenantRecord" name="Save Tenant Record" camunda:delegateExpression="${saveTenantRecordDelegate}">
+    <!-- Step 5: Save Tenant Record (Direct DB Save) -->
+    <bpmn:serviceTask id="ServiceTask_SaveTenantRecord" name="Save Tenant Record" camunda:delegateExpression="${tenantRecordDelegate}">
       <bpmn:incoming>Flow_5</bpmn:incoming>
       <bpmn:outgoing>Flow_6</bpmn:outgoing>
     </bpmn:serviceTask>

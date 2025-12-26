@@ -105,3 +105,5 @@ SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=https://f12e2153-e40c-4615-
 - ✅ **Easy switching** between local/cloud with environment variables
 - ✅ **Better reliability** for testing user-organization assignments
 
+
+

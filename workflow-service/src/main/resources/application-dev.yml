@@ -1,0 +1,23 @@
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: # Disabled for local testing
+
+# Disable Keycloak for local development  
+keycloak:
+  admin:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  security:
+    enabled: false
+
+logging:
+  level:
+    com.kymatic.workflow: DEBUG

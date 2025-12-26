@@ -1,0 +1,23 @@
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration
+  flyway:
+    enabled: true
+
+# Disable security for local development
+security:
+  enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  security:
+    enabled: false
+
+logging:
+  level:
+    com.kymatic: DEBUG
+    org.springframework.security: DEBUG

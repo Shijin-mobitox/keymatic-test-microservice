@@ -14,6 +14,7 @@ Write-Host "===================================" -ForegroundColor Cyan
 Write-Host "[ENV] Setting up cloud Keycloak environment..." -ForegroundColor Yellow
 $env:SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI = "https://f12e2153-e40c-4615-b9c9-3a4e6f5fd782.us.skycloak.io/realms/kymatic"
 $env:KEYCLOAK_BASE_URL = "https://f12e2153-e40c-4615-b9c9-3a4e6f5fd782.us.skycloak.io"
+$env:KEYCLOAK_SERVER_URL = "https://f12e2153-e40c-4615-b9c9-3a4e6f5fd782.us.skycloak.io"
 $env:KEYCLOAK_ISSUER_URI = "https://f12e2153-e40c-4615-b9c9-3a4e6f5fd782.us.skycloak.io/realms/kymatic"
 $env:KEYCLOAK_REALM = "kymatic"
 $env:KEYCLOAK_ADMIN_USERNAME = "admin-gG7X0T1x"

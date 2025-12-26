@@ -1,6 +1,6 @@
 package com.kymatic.workflow.delegate;
 
-import com.kymatic.workflow.service.DatabaseCreationService;
+import com.kymatic.workflow.service.TenantDatabaseManager;
 import org.camunda.bpm.engine.delegate.DelegateExecution;
 import org.camunda.bpm.engine.delegate.JavaDelegate;
 import org.slf4j.Logger;
@@ -27,10 +27,10 @@ public class DatabaseCreationDelegate implements JavaDelegate {
 	private static final Logger logger = LoggerFactory.getLogger(DatabaseCreationDelegate.class);
 	private static final Pattern SLUG_PATTERN = Pattern.compile("^[a-z0-9\\-]+$");
 
-	private final DatabaseCreationService databaseCreationService;
+	private final TenantDatabaseManager tenantDatabaseManager;
 
-	public DatabaseCreationDelegate(DatabaseCreationService databaseCreationService) {
-		this.databaseCreationService = databaseCreationService;
+	public DatabaseCreationDelegate(TenantDatabaseManager tenantDatabaseManager) {
+		this.tenantDatabaseManager = tenantDatabaseManager;
 	}
 
 	@Override
@@ -48,15 +48,15 @@ public class DatabaseCreationDelegate implements JavaDelegate {
 
 		// Build database name from slug
 		String databaseName = buildDatabaseNameFromSlug(slug);
-		String databaseConnectionString = databaseCreationService.buildDatabaseConnectionString(databaseName);
+		String databaseConnectionString = tenantDatabaseManager.buildDatabaseConnectionString(databaseName);
 
 		logger.info("Creating tenant database: slug={}, databaseName={}", slug, databaseName);
 
 		// Create database
-		databaseCreationService.createDatabaseIfNotExists(databaseName);
+		tenantDatabaseManager.createDatabaseIfNotExists(databaseName);
 
 		// Run migrations
-		List<String> appliedVersions = databaseCreationService.migrateTenantDatabase(databaseName);
+		List<String> appliedVersions = tenantDatabaseManager.migrateTenantDatabase(databaseName);
 
 		execution.setVariable("databaseName", databaseName);
 		execution.setVariable("databaseConnectionString", databaseConnectionString);

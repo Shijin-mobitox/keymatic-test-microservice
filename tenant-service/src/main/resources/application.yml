@@ -64,7 +64,8 @@ spring:
       resourceserver:
         jwt:
           # Keycloak issuer URI - configurable via environment variables
-          # Default to local for backward compatibility, but can be overridden
+          # Set SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI environment variable to override
+          # Default to local for backward compatibility, but should be overridden via environment variable
           issuer-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI:http://keycloak:8080/realms/kymatic}
           # JWK Set URI - Spring Boot will auto-configure this from issuer-uri if not specified
           # But can be explicitly set via environment variable if needed

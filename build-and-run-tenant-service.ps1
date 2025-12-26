@@ -1,26 +1,146 @@
-# Build and Run Tenant Service with Cloud Keycloak Configuration
+# Build and Run Script for Tenant Service
+# This script stops existing service, builds, and runs tenant-service with cloud Keycloak configuration
+
 param(
     [Parameter(Mandatory=$false)]
     [switch]$SkipBuild = $false,
     
     [Parameter(Mandatory=$false)]
-    [switch]$CleanBuild = $true,
-    
-    [Parameter(Mandatory=$false)]
-    [switch]$Background = $false
+    [switch]$SkipStop = $false
 )
 
-Write-Host "🏗️  BUILDING AND RUNNING TENANT SERVICE" -ForegroundColor Cyan
-Write-Host "=======================================" -ForegroundColor Cyan
-Write-Host "Skip Build: $SkipBuild" -ForegroundColor White
-Write-Host "Clean Build: $CleanBuild" -ForegroundColor White
-Write-Host "Background: $Background" -ForegroundColor White
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "BUILD AND RUN TENANT SERVICE" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
+# Function to forcefully kill processes on a specific port
+function Stop-ProcessOnPort {
+    param([int]$Port)
+    
+    $killed = $false
+    $attempts = 0
+    $maxAttempts = 3
+    
+    # Retry loop to ensure process is killed
+    while ($attempts -lt $maxAttempts) {
+        $attempts++
+        $foundProcess = $false
+        
+        # Method 1: Use Get-NetTCPConnection
+        try {
+            $connections = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | Where-Object {$_.State -eq "Listen"}
+            if ($connections) {
+                $pids = $connections | Select-Object -ExpandProperty OwningProcess -Unique
+                foreach ($pid in $pids) {
+                    try {
+                        $process = Get-Process -Id $pid -ErrorAction Stop
+                        Write-Host "  Killing process (PID: $pid, Name: $($process.ProcessName)) on port ${Port}..." -ForegroundColor Yellow
+                        Stop-Process -Id $pid -Force -ErrorAction Stop
+                        Start-Sleep -Milliseconds 300
+                        $killed = $true
+                        $foundProcess = $true
+                    } catch {
+                        # Process might already be stopped
+                    }
+                }
+            }
+        } catch {
+            # Get-NetTCPConnection might not be available or failed
+        }
+        
+        # Method 2: Use netstat as fallback
+        try {
+            $netstat = netstat -ano | Select-String ":${Port}.*LISTENING"
+            if ($netstat) {
+                foreach ($line in $netstat) {
+                    $pid = ($line.Line -split '\s+')[-1]
+                    if ($pid -match '^\d+$') {
+                        try {
+                            $process = Get-Process -Id $pid -ErrorAction Stop
+                            Write-Host "  Killing process (PID: $pid, Name: $($process.ProcessName)) on port ${Port}..." -ForegroundColor Yellow
+                            Stop-Process -Id $pid -Force -ErrorAction Stop
+                            Start-Sleep -Milliseconds 300
+                            $killed = $true
+                            $foundProcess = $true
+                        } catch {
+                            # Process might already be stopped
+                        }
+                    }
+                }
+            }
+        } catch {
+            # netstat might fail
+        }
+        
+        # If no process found, break out of retry loop
+        if (-not $foundProcess) {
+            break
+        }
+        
+        # Wait a bit before retry
+        if ($attempts -lt $maxAttempts) {
+            Start-Sleep -Milliseconds 500
+        }
+    }
+    
+    return $killed
+}
+
+# Kill processes on port 8083 BEFORE anything else
+if (-not $SkipStop) {
+    Write-Host "[KILL] Killing any processes on port 8083..." -ForegroundColor Yellow
+    Write-Host "  This will be done multiple times to ensure port is free..." -ForegroundColor Gray
+    
+    # Kill multiple times to ensure processes are stopped
+    for ($i = 1; $i -le 3; $i++) {
+        $killed = Stop-ProcessOnPort -Port 8083
+        if ($killed) {
+            Write-Host "  Attempt ${i}: Killed processes, waiting..." -ForegroundColor Yellow
+            Start-Sleep -Seconds 1
+        }
+    }
+    
+    # Final verification
+    Write-Host "  Verifying port is free..." -ForegroundColor Gray
+    $finalCheck = Get-NetTCPConnection -LocalPort 8083 -ErrorAction SilentlyContinue | Where-Object {$_.State -eq "Listen"}
+    
+    if ($finalCheck) {
+        Write-Host "  [WARN] Port still in use, force killing all Java processes on port 8083..." -ForegroundColor Yellow
+        # Last resort: kill all Java processes using port 8083
+        Get-Process -Name "java" -ErrorAction SilentlyContinue | ForEach-Object {
+            try {
+                $conns = Get-NetTCPConnection -OwningProcess $_.Id -ErrorAction SilentlyContinue | Where-Object {$_.LocalPort -eq 8083 -and $_.State -eq "Listen"}
+                if ($conns) {
+                    Write-Host "    Force killing Java process $($_.Id)..." -ForegroundColor Yellow
+                    Stop-Process -Id $_.Id -Force -ErrorAction Stop
+                }
+            } catch {}
+        }
+        Start-Sleep -Seconds 2
+    }
+    
+    # Final check
+    $finalCheck = Get-NetTCPConnection -LocalPort 8083 -ErrorAction SilentlyContinue | Where-Object {$_.State -eq "Listen"}
+    if (-not $finalCheck) {
+        Write-Host "  [OK] Port 8083 is now free" -ForegroundColor Green
+    } else {
+        Write-Host "  [ERROR] Port 8083 still in use! Please manually kill processes." -ForegroundColor Red
+        $pids = $finalCheck | Select-Object -ExpandProperty OwningProcess -Unique
+        Write-Host "    PIDs: $($pids -join ', ')" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host ""
+} else {
+    Write-Host "[SKIP] Skipping port kill (SkipStop flag set)" -ForegroundColor Gray
+    Write-Host ""
+}
+
 # Set up environment variables for cloud Keycloak
-Write-Host "[ENV] Setting up cloud Keycloak environment..." -ForegroundColor Yellow
+Write-Host "[ENV] Configuring environment variables..." -ForegroundColor Yellow
 $env:SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI = "https://f12e2153-e40c-4615-b9c9-3a4e6f5fd782.us.skycloak.io/realms/kymatic"
 $env:KEYCLOAK_BASE_URL = "https://f12e2153-e40c-4615-b9c9-3a4e6f5fd782.us.skycloak.io"
+$env:KEYCLOAK_SERVER_URL = "https://f12e2153-e40c-4615-b9c9-3a4e6f5fd782.us.skycloak.io"
 $env:KEYCLOAK_ISSUER_URI = "https://f12e2153-e40c-4615-b9c9-3a4e6f5fd782.us.skycloak.io/realms/kymatic"
 $env:KEYCLOAK_REALM = "kymatic"
 $env:KEYCLOAK_ADMIN_USERNAME = "admin-gG7X0T1x"
@@ -31,201 +151,136 @@ $env:SPRING_DATASOURCE_USERNAME = "postgres"
 $env:SPRING_DATASOURCE_PASSWORD = "root"
 $env:SERVER_PORT = "8083"
 
-Write-Host "✅ Environment variables configured:" -ForegroundColor Green
-Write-Host "   KEYCLOAK_BASE_URL: $env:KEYCLOAK_BASE_URL" -ForegroundColor White
-Write-Host "   SERVER_PORT: $env:SERVER_PORT" -ForegroundColor White
-Write-Host "   DATABASE: PostgreSQL localhost:5432" -ForegroundColor White
+Write-Host "[SUCCESS] Environment configured:" -ForegroundColor Green
+Write-Host "  KEYCLOAK_BASE_URL: $env:KEYCLOAK_BASE_URL" -ForegroundColor White
+Write-Host "  SERVER_PORT: $env:SERVER_PORT" -ForegroundColor White
 Write-Host ""
 
-# Check prerequisites
-Write-Host "[1/5] Checking prerequisites..." -ForegroundColor Yellow
-
-# Check Java
-try {
-    $javaVersion = java -version 2>&1 | Select-String "version"
-    Write-Host "✅ Java: $($javaVersion.Line)" -ForegroundColor Green
-} catch {
-    Write-Host "❌ Java not found. Please install Java 21+" -ForegroundColor Red
-    exit 1
-}
-
-# Check PostgreSQL
-try {
-    $pgProcess = Get-Process postgres -ErrorAction SilentlyContinue
-    if ($pgProcess) {
-        Write-Host "✅ PostgreSQL: Running ($($pgProcess.Count) processes)" -ForegroundColor Green
-    } else {
-        Write-Host "⚠️  PostgreSQL: Not detected as running" -ForegroundColor Yellow
-        Write-Host "   Make sure PostgreSQL is running on localhost:5432" -ForegroundColor White
-    }
-} catch {
-    Write-Host "⚠️  Could not check PostgreSQL status" -ForegroundColor Yellow
-}
-
-# Check if port 8083 is available
-try {
-    $portCheck = Test-NetConnection -ComputerName localhost -Port 8083 -InformationLevel Quiet -WarningAction SilentlyContinue
-    if ($portCheck) {
-        Write-Host "⚠️  Port 8083: Already in use (stopping existing service...)" -ForegroundColor Yellow
-        # Try to find and stop existing Java processes on port 8083
-        $netstat = netstat -ano | Select-String ":8083.*LISTENING"
-        if ($netstat) {
-            $pid = ($netstat.Line -split '\s+')[-1]
-            try {
-                Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-                Start-Sleep -Seconds 2
-                Write-Host "✅ Stopped existing service on port 8083" -ForegroundColor Green
-            } catch {
-                Write-Host "⚠️  Could not stop existing service" -ForegroundColor Yellow
-            }
-        }
-    } else {
-        Write-Host "✅ Port 8083: Available" -ForegroundColor Green
-    }
-} catch {
-    Write-Host "✅ Port 8083: Available" -ForegroundColor Green
-}
-
-# Build the project
+# Build service
 if (-not $SkipBuild) {
-    Write-Host "[2/5] Building tenant service..." -ForegroundColor Yellow
-    
-    if ($CleanBuild) {
-        Write-Host "🧹 Cleaning previous build..." -ForegroundColor White
-        try {
-            & ./gradlew clean
-            if ($LASTEXITCODE -ne 0) {
-                throw "Clean failed"
-            }
-            Write-Host "✅ Clean completed" -ForegroundColor Green
-        } catch {
-            Write-Host "❌ Clean failed: $($_.Exception.Message)" -ForegroundColor Red
-            exit 1
-        }
-    }
-    
-    Write-Host "🔨 Compiling Java sources..." -ForegroundColor White
+    Write-Host "[BUILD] Building tenant-service..." -ForegroundColor Yellow
     try {
-        & ./gradlew :tenant-service:compileJava
+        & ./gradlew :tenant-service:clean :tenant-service:build -x test
         if ($LASTEXITCODE -ne 0) {
-            throw "Compilation failed"
+            throw "Tenant service build failed with exit code $LASTEXITCODE"
         }
-        Write-Host "✅ Compilation successful" -ForegroundColor Green
+        Write-Host "  [OK] Tenant service build completed" -ForegroundColor Green
     } catch {
-        Write-Host "❌ Build failed: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host ""
-        Write-Host "🔍 Troubleshooting:" -ForegroundColor Yellow
-        Write-Host "   1. Check for compilation errors above" -ForegroundColor White
-        Write-Host "   2. Ensure all dependencies are available" -ForegroundColor White
-        Write-Host "   3. Try: ./gradlew clean build" -ForegroundColor White
+        Write-Host "  [ERROR] Tenant service build failed: $($_.Exception.Message)" -ForegroundColor Red
         exit 1
     }
-    
-    Write-Host "📦 Building JAR..." -ForegroundColor White
-    try {
-        & ./gradlew :tenant-service:build -x test
-        if ($LASTEXITCODE -ne 0) {
-            throw "Build failed"
-        }
-        Write-Host "✅ Build completed successfully" -ForegroundColor Green
-    } catch {
-        Write-Host "❌ Build failed: $($_.Exception.Message)" -ForegroundColor Red
-        exit 1
-    }
+    Write-Host ""
 } else {
-    Write-Host "[2/5] Skipping build (as requested)" -ForegroundColor Gray
-}
-
-# Test database connection
-Write-Host "[3/5] Testing database connection..." -ForegroundColor Yellow
-try {
-    # Simple TCP connection test to PostgreSQL port
-    $tcpTest = Test-NetConnection -ComputerName "localhost" -Port 5432 -InformationLevel Quiet -WarningAction SilentlyContinue
-    if ($tcpTest) {
-        Write-Host "✅ Database connection: PostgreSQL port 5432 is reachable" -ForegroundColor Green
-    } else {
-        Write-Host "⚠️  Database connection: PostgreSQL port 5432 not reachable" -ForegroundColor Yellow
-        Write-Host "   Make sure PostgreSQL is running on localhost:5432" -ForegroundColor White
-    }
-} catch {
-    Write-Host "⚠️  Database connection test failed: $($_.Exception.Message)" -ForegroundColor Yellow
-    Write-Host "   Service will attempt to connect during startup" -ForegroundColor White
+    Write-Host "[SKIP] Skipping build (SkipBuild flag set)" -ForegroundColor Gray
+    Write-Host ""
 }
 
 # Test Keycloak connectivity
-Write-Host "[4/5] Testing Keycloak connectivity..." -ForegroundColor Yellow
+Write-Host "[TEST] Testing Keycloak connectivity..." -ForegroundColor Yellow
 try {
-    $response = Invoke-WebRequest -Uri "$env:KEYCLOAK_BASE_URL/realms/$env:KEYCLOAK_REALM" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
-    Write-Host "✅ Keycloak connectivity: Successful" -ForegroundColor Green
-    Write-Host "   Realm '$env:KEYCLOAK_REALM' is accessible" -ForegroundColor White
+    $kcResponse = Invoke-WebRequest -Uri "$env:KEYCLOAK_BASE_URL/realms/$env:KEYCLOAK_REALM" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+    Write-Host "  [OK] Keycloak is accessible" -ForegroundColor Green
 } catch {
-    Write-Host "❌ Keycloak connectivity: Failed" -ForegroundColor Red
-    Write-Host "   Error: $($_.Exception.Message)" -ForegroundColor White
-    Write-Host "   Service will attempt to connect during startup" -ForegroundColor Yellow
+    Write-Host "  [WARN] Keycloak connectivity test failed: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "      Service will attempt to connect during startup" -ForegroundColor Gray
 }
-
-# Run the service
-Write-Host "[5/5] Starting tenant service..." -ForegroundColor Yellow
 Write-Host ""
 
-if ($Background) {
-    Write-Host "🚀 Starting tenant service in background..." -ForegroundColor Green
-    Write-Host "   Port: 8083" -ForegroundColor White
-    Write-Host "   Logs: Check console for startup messages" -ForegroundColor White
-    Write-Host ""
-    
-    # Start in background
-    Start-Process powershell -ArgumentList "-Command", "cd '$PWD'; ./gradlew :tenant-service:bootRun" -WindowStyle Minimized
-    
-    # Wait and check if service started
-    Write-Host "⏳ Waiting for service to start..." -ForegroundColor Yellow
-    for ($i = 1; $i -le 30; $i++) {
-        Start-Sleep -Seconds 2
+# Final kill before starting
+Write-Host "[FINAL KILL] Ensuring port 8083 is free before starting..." -ForegroundColor Yellow
+for ($k = 1; $k -le 5; $k++) {
+    Stop-ProcessOnPort -Port 8083 | Out-Null
+    Start-Sleep -Milliseconds 500
+}
+Start-Sleep -Seconds 2
+
+# Aggressive double-check
+$finalCheck = Get-NetTCPConnection -LocalPort 8083 -ErrorAction SilentlyContinue | Where-Object {$_.State -eq "Listen"}
+if ($finalCheck) {
+    Write-Host "  [WARN] Port 8083 still in use, force killing ALL Java processes..." -ForegroundColor Yellow
+    $pids = $finalCheck | Select-Object -ExpandProperty OwningProcess -Unique
+    foreach ($pid in $pids) {
         try {
-            $health = Invoke-WebRequest -Uri "http://localhost:8083/actuator/health" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-            if ($health.StatusCode -eq 200) {
-                Write-Host "✅ Service started successfully!" -ForegroundColor Green
-                Write-Host "   Health check: http://localhost:8083/actuator/health" -ForegroundColor White
-                Write-Host "   Swagger UI: http://localhost:8083/swagger-ui.html" -ForegroundColor White
-                Write-Host "   API Base: http://localhost:8083/api" -ForegroundColor White
-                return
-            }
+            $proc = Get-Process -Id $pid -ErrorAction Stop
+            Write-Host "    Killing process $pid ($($proc.ProcessName))..." -ForegroundColor Yellow
+            Stop-Process -Id $pid -Force -ErrorAction Stop
         } catch {
-            # Still starting up
+            Write-Host "    Could not kill process ${pid}: $($_.Exception.Message)" -ForegroundColor Red
         }
-        Write-Host "   Attempt $i/30..." -ForegroundColor Gray
     }
     
-    Write-Host "⚠️  Service may still be starting up. Check manually:" -ForegroundColor Yellow
-    Write-Host "   curl http://localhost:8083/actuator/health" -ForegroundColor White
+    # Kill ALL Java processes using port 8083
+    Get-Process -Name "java" -ErrorAction SilentlyContinue | Where-Object {
+        $conns = Get-NetTCPConnection -OwningProcess $_.Id -ErrorAction SilentlyContinue | Where-Object {$_.LocalPort -eq 8083 -and $_.State -eq "Listen"}
+        $conns
+    } | ForEach-Object {
+        Write-Host "    Force killing Java process $($_.Id) on port 8083..." -ForegroundColor Yellow
+        Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+    }
     
-} else {
-    Write-Host "🚀 Starting tenant service in foreground..." -ForegroundColor Green
-    Write-Host "   Port: 8083" -ForegroundColor White
-    Write-Host "   Press Ctrl+C to stop" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "📊 Useful endpoints:" -ForegroundColor Cyan
-    Write-Host "   Health: http://localhost:8083/actuator/health" -ForegroundColor White
-    Write-Host "   Swagger: http://localhost:8083/swagger-ui.html" -ForegroundColor White
-    Write-Host "   API: http://localhost:8083/api/tenants" -ForegroundColor White
-    Write-Host ""
-    Write-Host "Starting service..." -ForegroundColor Green
-    Write-Host "===================" -ForegroundColor Green
+    Start-Sleep -Seconds 3
     
-    try {
-        & ./gradlew :tenant-service:bootRun
-    } catch {
-        Write-Host ""
-        Write-Host "❌ Service startup failed: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host ""
-        Write-Host "🔍 Troubleshooting:" -ForegroundColor Yellow
-        Write-Host "   1. Check logs above for specific errors" -ForegroundColor White
-        Write-Host "   2. Verify PostgreSQL is running: Get-Process postgres" -ForegroundColor White
-        Write-Host "   3. Check port availability: Test-NetConnection localhost -Port 8083" -ForegroundColor White
-        Write-Host "   4. Verify environment variables are set correctly" -ForegroundColor White
+    # Final verification
+    $finalCheck2 = Get-NetTCPConnection -LocalPort 8083 -ErrorAction SilentlyContinue | Where-Object {$_.State -eq "Listen"}
+    if ($finalCheck2) {
+        Write-Host "  [ERROR] Port 8083 STILL in use! PIDs: $($finalCheck2.OwningProcess -join ', ')" -ForegroundColor Red
+        Write-Host "  Please manually kill these processes or run: .\kill-ports.ps1" -ForegroundColor Red
         exit 1
     }
 }
+Write-Host "  [OK] Port 8083 is now free" -ForegroundColor Green
+Write-Host ""
+
+# Start service
+Write-Host "[START] Starting tenant-service on port 8083..." -ForegroundColor Yellow
+Write-Host ""
+
+$tenantEnvString = "`$env:SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI='$env:SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI'; `$env:KEYCLOAK_BASE_URL='$env:KEYCLOAK_BASE_URL'; `$env:KEYCLOAK_SERVER_URL='$env:KEYCLOAK_SERVER_URL'; `$env:KEYCLOAK_ISSUER_URI='$env:KEYCLOAK_ISSUER_URI'; `$env:KEYCLOAK_REALM='$env:KEYCLOAK_REALM'; `$env:KEYCLOAK_ADMIN_USERNAME='$env:KEYCLOAK_ADMIN_USERNAME'; `$env:KEYCLOAK_ADMIN_PASSWORD='$env:KEYCLOAK_ADMIN_PASSWORD'; `$env:KEYCLOAK_ORG_CLEANUP_ENABLED='$env:KEYCLOAK_ORG_CLEANUP_ENABLED'; `$env:SPRING_DATASOURCE_URL='$env:SPRING_DATASOURCE_URL'; `$env:SPRING_DATASOURCE_USERNAME='$env:SPRING_DATASOURCE_USERNAME'; `$env:SPRING_DATASOURCE_PASSWORD='$env:SPRING_DATASOURCE_PASSWORD'; `$env:SERVER_PORT='$env:SERVER_PORT'"
+
+$tenantCommand = "-NoExit", "-Command", "cd '$PWD'; $tenantEnvString; Write-Host 'Starting Tenant Service on port 8083...' -ForegroundColor Cyan; ./gradlew :tenant-service:bootRun"
+Start-Process powershell -ArgumentList $tenantCommand
+
+Write-Host "[SUCCESS] Tenant service is starting!" -ForegroundColor Green
+Write-Host ""
+Write-Host "Service Endpoints:" -ForegroundColor Cyan
+Write-Host "  Health: http://localhost:8083/actuator/health" -ForegroundColor White
+Write-Host "  Swagger: http://localhost:8083/swagger-ui.html" -ForegroundColor White
+Write-Host "  API: http://localhost:8083/api/tenants" -ForegroundColor White
+Write-Host ""
+Write-Host "Keycloak Configuration:" -ForegroundColor Cyan
+Write-Host "  URL: $env:KEYCLOAK_BASE_URL" -ForegroundColor White
+Write-Host "  Realm: $env:KEYCLOAK_REALM" -ForegroundColor White
+Write-Host ""
+Write-Host "Waiting for service to be ready..." -ForegroundColor Yellow
+
+# Wait for service to be ready
+$maxAttempts = 60
+$attempt = 0
+$serviceReady = $false
+
+while ($attempt -lt $maxAttempts -and -not $serviceReady) {
+    Start-Sleep -Seconds 2
+    $attempt++
+    
+    try {
+        $health = Invoke-WebRequest -Uri "http://localhost:8083/actuator/health" -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+        if ($health.StatusCode -eq 200) {
+            $serviceReady = $true
+            Write-Host "  [OK] Tenant service is ready!" -ForegroundColor Green
+        }
+    } catch {
+        # Still starting
+    }
+    
+    if ($attempt % 10 -eq 0 -and ($attempt -gt 0)) {
+        Write-Host "  Checking... (attempt $attempt/$maxAttempts)" -ForegroundColor Gray
+    }
+}
 
 Write-Host ""
-Write-Host "🎉 Tenant service is ready!" -ForegroundColor Green
+if ($serviceReady) {
+    Write-Host "[SUCCESS] Tenant service is ready!" -ForegroundColor Green
+} else {
+    Write-Host "[INFO] Service is still starting. Check the service window for details." -ForegroundColor Yellow
+}
+Write-Host ""

@@ -74,7 +74,8 @@ export const tenantService = {
 	},
 
 	/**
-	 * Create a new tenant with Organizations support
+	 * Create a new tenant with full Keycloak Organizations support
+	 * (Use /legacy endpoint if Keycloak is not available)
 	 */
 	createTenant: async (token: string, data: {
 		tenantName: string
@@ -92,6 +93,21 @@ export const tenantService = {
 		metadata: any
 	}): Promise<TenantInfo> => {
 		return api.post<TenantInfo>('/api/tenants', data, token)
+	},
+
+	/**
+	 * Create tenant without Keycloak (legacy mode)
+	 */
+	createTenantLegacy: async (token: string, data: {
+		tenantName: string
+		slug: string
+		subscriptionTier: string
+		maxUsers: number
+		maxStorageGb: number
+		adminEmail: string
+		metadata: any
+	}): Promise<TenantInfo> => {
+		return api.post<TenantInfo>('/api/tenants/legacy', data, token)
 	},
 }
 
